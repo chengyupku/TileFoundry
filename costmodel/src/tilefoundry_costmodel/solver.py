@@ -44,7 +44,8 @@ class ListPipelineSolver:
                 return self._infeasible(
                     f"stage {stage.name!r} has invalid duration {duration!r}")
             durations[stage.name] = duration
-            for resource in stage.resources:
+            for resource_demand in stage.resource_demands:
+                resource = resource_demand.resource
                 capacity = hardware.capacity(resource)
                 if capacity is None:
                     return self._infeasible(
@@ -52,6 +53,10 @@ class ListPipelineSolver:
                 if capacity <= 0:
                     return self._infeasible(
                         f"resource {resource!r} has non-positive capacity {capacity}")
+                if resource_demand.demand > capacity:
+                    return self._infeasible(
+                        f"stage {stage.name!r} demand {resource_demand.demand} "
+                        f"exceeds resource {resource!r} capacity {capacity}")
 
         successors: Dict[str, List[Tuple[str, float]]] = defaultdict(list)
         predecessors: Dict[str, List[Tuple[str, float]]] = defaultdict(list)
@@ -107,12 +112,20 @@ class ListPipelineSolver:
             selected_lanes: List[Tuple[str, int, float, Optional[str]]] = []
             resource_ready = 0.0
             resource_pred: Optional[str] = None
-            for resource in stage.resources:
-                lane_index, (available, previous) = min(
+            for resource_demand in stage.resource_demands:
+                resource = resource_demand.resource
+                candidates = sorted(
                     enumerate(lanes[resource]),
                     key=lambda item: (item[1][0], item[0]),
+                )[:resource_demand.demand]
+                selected_lanes.extend(
+                    (resource, lane_index, available, previous)
+                    for lane_index, (available, previous) in candidates
                 )
-                selected_lanes.append((resource, lane_index, available, previous))
+                available, previous = max(
+                    (lane[1] for lane in candidates),
+                    key=lambda item: item[0],
+                )
                 if available >= resource_ready:
                     resource_ready = available
                     resource_pred = previous
@@ -132,6 +145,7 @@ class ListPipelineSolver:
                 start_ns=start,
                 end_ns=end,
                 resources=stage.resources,
+                resource_demands=stage.resource_demands,
             ))
 
             for successor, _ in successors.get(name, ()):
@@ -151,9 +165,10 @@ class ListPipelineSolver:
         resource_bound = 0.0
         for resource in hardware.resources:
             busy = sum(
-                durations[stage.name]
+                durations[stage.name] * resource_demand.demand
                 for stage in problem.stages
-                if resource.name in stage.resources)
+                for resource_demand in stage.resource_demands
+                if resource_demand.resource == resource.name)
             resource_bound = max(resource_bound, busy / resource.capacity)
 
         return PipelineSolution(
@@ -213,4 +228,3 @@ class ListPipelineSolver:
             status=SolveStatus.INFEASIBLE,
             diagnostics=(message,),
         )
-

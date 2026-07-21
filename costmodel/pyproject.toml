@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tilefoundry-costmodel"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lightweight resource-constrained pipeline scheduling interfaces for TileFoundry."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,6 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+cpsat = ["ortools>=9.10"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

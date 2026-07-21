@@ -1,28 +1,35 @@
 # TileFoundry Cost Model
 
-Lightweight, compiler-independent software-pipeline scheduling API.
+Compiler-independent finite software-pipeline scheduling API.
 
-```python
-from tilefoundry_costmodel import (
-    ListPipelineSolver,
-    PipelineHardware,
-    PipelineProblem,
-    ResourceSpec,
-    StageSpec,
-)
+The caller lowers a local work graph into:
 
-solution = ListPipelineSolver().solve(problem, timing_oracle, hardware)
-```
+- `StageSpec`: finite stage instances and per-resource capacity demands.
+- `ResourceDemand`: named resource slots occupied for the full stage duration.
+- `Precedence`: dependency constraints.
+- `PipelineHardware`: named resource capacities.
+- `TimingOracle`: stage durations.
 
-The caller owns lowering into finite stage instances, precedence constraints,
-resource domains, and buffer-reuse constraints. The timing oracle owns stage
-durations. The solver does not import TileS2 or TileFoundry compiler IR.
+Both solvers consume the same contract:
 
-Local editable install:
+- `ListPipelineSolver`: deterministic feasible schedule.
+- `CpSatPipelineSolver`: optional OR-Tools makespan minimization.
+
+Install from a TileFoundry checkout:
 
 ```bash
-python -m pip install -e /path/to/tilefoundry/costmodel
+python -m pip install '/path/to/TileFoundry/costmodel[cpsat]'
 ```
 
-`ListPipelineSolver` returns a feasible deterministic schedule; it does not
-claim optimality. A later CP-SAT solver can implement the same contract.
+Editable development install:
+
+```bash
+python -m pip install -e '/path/to/TileFoundry/costmodel[cpsat]'
+```
+
+The package exports `COST_MODEL_API_VERSION`. Integrations must check this API
+version rather than infer compatibility from solver class names.
+
+`StageSpec(resources=("pipe",))` is the demand-one compatibility form. Use
+`StageSpec(resource_demands=(ResourceDemand("pipe", 2),))` when a stage occupies
+multiple slots of a resource whose `ResourceSpec.capacity` is greater than one.
