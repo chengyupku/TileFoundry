@@ -33,7 +33,35 @@ class ScheduleAlgorithm:
             raise ValueError("a schedule algorithm needs a non-empty topology name")
 
 
-SCHEDULES: AlgorithmRegistry[ScheduleAlgorithm] = AlgorithmRegistry("schedule")
+class _ScheduleRegistry(AlgorithmRegistry[ScheduleAlgorithm]):
+    """The shared registry, loading builtins only when a caller reads it."""
+
+    def __init__(self) -> None:
+        super().__init__("schedule")
+        self._builtins_loaded = False
+
+    def _ensure_builtins(self) -> None:
+        if self._builtins_loaded:
+            return
+        from tilefoundry.target import register_schedule_algorithms  # noqa: PLC0415
+
+        register_schedule_algorithms()
+        self._builtins_loaded = True
+
+    def resolve(self, target: object, selector: str) -> ScheduleAlgorithm:
+        self._ensure_builtins()
+        return super().resolve(target, selector)
+
+    def selectors_for(self, target_type: type) -> tuple[str, ...]:
+        self._ensure_builtins()
+        return super().selectors_for(target_type)
+
+    def registered_pairs(self) -> tuple[tuple[str, str], ...]:
+        self._ensure_builtins()
+        return super().registered_pairs()
+
+
+SCHEDULES = _ScheduleRegistry()
 
 
 def register_schedule(

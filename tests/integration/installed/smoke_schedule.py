@@ -46,9 +46,7 @@ def test_a_launch_provided_extent_cannot_be_scheduled(tf, tmp_path, cmine) -> No
     assert "The rule: tilefoundry spec target topology-levels" in done.stderr
 
 
-def test_a_module_without_an_entry_names_its_functions_and_the_rule(
-    tf, tmp_path, cmine
-) -> None:
+def test_a_module_without_an_entry_names_its_functions_and_the_rule(tf, tmp_path, cmine) -> None:
     entryless = tmp_path / "entryless.py"
     entryless.write_text(
         cmine.read_text(encoding="utf-8").replace(
@@ -70,8 +68,50 @@ def test_a_level_the_target_does_not_schedule_is_refused(tf, cmine) -> None:
 
 def test_the_solver_flags_are_accepted_by_the_installed_command(tf, cmine) -> None:
     done = tf(
-        "schedule", f"{cmine}:CMine.root", "--topology", "cta",
-        "--first-plan", "--solver-timeout", "30", "--solver-workers", "2",
+        "schedule",
+        f"{cmine}:CMine.root",
+        "--topology",
+        "cta",
+        "--first-plan",
+        "--solver-timeout",
+        "30",
+        "--solver-workers",
+        "2",
     )
     assert done.returncode == 0, done.stderr
     assert "nvidia.h200_sxm" in done.stdout
+
+
+def test_installed_schedule_accepts_explicit_warpgroup_program_json(tf, tmp_path) -> None:
+    program = tmp_path / "warpgroup-program.json"
+    program.write_text(
+        json.dumps(
+            {
+                "format": "tilefoundry.warpgroup_program.v1",
+                "warp_groups": 2,
+                "types": {"value": {"shape": [1], "dtype": "fp32", "space": "register"}},
+                "inputs": [],
+                "loop": {
+                    "index": "%iteration",
+                    "iterations": 1,
+                    "iter_args": [],
+                    "ops": [
+                        {
+                            "id": "alpha",
+                            "outputs": [{"id": "%alpha", "type": "value", "expr": 1.0}],
+                        },
+                        {
+                            "id": "beta",
+                            "outputs": [{"id": "%beta", "type": "value", "expr": 2.0}],
+                        },
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    done = tf("schedule", "--warpgroup-program", str(program), "--fixture-costs", "--json")
+
+    assert done.returncode == 0, done.stderr
+    assert set(json.loads(done.stdout)) == {"format", "lanes", "sync", "times"}

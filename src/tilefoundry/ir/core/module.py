@@ -3,6 +3,8 @@ orchestration methods. See [core-ir §1](docs/spec/core-ir.md#1-module).
 """
 from __future__ import annotations
 
+# ruff: noqa: I001 -- PrimFunction must load before HIR to break their package cycle.
+
 import copy
 import functools
 import types
@@ -10,8 +12,8 @@ from dataclasses import dataclass, field
 from dataclasses import replace as _replace
 from typing import Mapping, Union
 
-from tilefoundry.ir.hir.function import Function as HirFunction
 from tilefoundry.ir.tir.prim_function import PrimFunction
+from tilefoundry.ir.hir.function import Function as HirFunction
 from tilefoundry.ir.types.shard.mesh import Topology
 from tilefoundry.ir.types.tensor_type import TensorType
 from tilefoundry.target import Target

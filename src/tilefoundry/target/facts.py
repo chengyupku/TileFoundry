@@ -61,8 +61,18 @@ def _require_facts_type(facts_type: type) -> None:
 class TargetFactsRegistry:
     """Conversions from a concrete Target to an algorithm's Facts aggregate."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, load_builtins: bool = False) -> None:
         self._conversions: dict[tuple[type, type], FactsConversion] = {}
+        self._load_builtins = load_builtins
+        self._builtins_loaded = False
+
+    def _ensure_builtins(self) -> None:
+        if not self._load_builtins or self._builtins_loaded:
+            return
+        from tilefoundry.target import register_facts_projections  # noqa: PLC0415
+
+        register_facts_projections()
+        self._builtins_loaded = True
 
     def register(
         self, target_type: type, facts_type: type, conversion: FactsConversion
@@ -88,6 +98,7 @@ class TargetFactsRegistry:
 
     def registered_pairs(self) -> tuple[tuple[str, str], ...]:
         """Every registered pair by name, in sorted order."""
+        self._ensure_builtins()
         return tuple(
             sorted(
                 (target_type.__name__, facts_type.__name__)
@@ -105,6 +116,7 @@ class TargetFactsRegistry:
         can describe different hardware, so inheriting a conversion would
         silently project the wrong facts.
         """
+        self._ensure_builtins()
         _require_facts_type(facts_type)
         key = (type(target), facts_type)
         try:
@@ -125,7 +137,7 @@ class TargetFactsRegistry:
         return facts
 
 
-TARGET_FACTS = TargetFactsRegistry()
+TARGET_FACTS = TargetFactsRegistry(load_builtins=True)
 
 
 def register_target_facts(

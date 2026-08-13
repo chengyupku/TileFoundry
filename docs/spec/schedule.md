@@ -699,3 +699,261 @@ class PartitionFacts:
   - Compiler policy MUST stay in `ScheduleOptions`, not in these facts: what the
     hardware is does not depend on how aggressively the compiler was asked to
     schedule it.
+
+## 6. Warpgroup scheduling documents
+
+Warpgroup scheduling has three versioned, kernel-independent document
+boundaries. `WarpgroupProgram` is authored semantic work,
+`WarpgroupProblem` is the same work closed to integer costs, and
+`WarpgroupSchedule` is one successful lane and timing result. They are not
+`SchedulePlan` subtypes and do not change the HIR pipeline or partition
+scheduler boundaries above.
+
+All three documents use strict JSON: every object rejects unknown fields, every
+array item has one declared shape, and every identifier is a non-empty ASCII
+string. SSA identifiers begin with `%`. Decoding and direct Python construction
+MUST produce the same frozen records, tuples, enums, expressions, and scalar
+literals. A typed record MUST NOT retain a caller-owned mapping, list, or opaque
+object. Canonical JSON sorts object keys and all semantically unordered
+collections, uses compact separators, and contains no non-finite JSON number.
+
+Validation has three explicit layers. The JSON Schemas validate JSON structure,
+closed property sets, scalar domains, expression arity, and the portable ASCII
+identifier grammar. They do not claim constraints across separate records. The
+decoder and immutable model enforce cross-field type, ID, SSA, expression,
+loop-phi, schedule-local uniqueness, and interval semantics. The independent
+schedule verifier consumes a problem and schedule together and is responsible
+for operation coverage, durations, dependencies, lane locality, resources,
+synchronization reachability, shared-allocation reuse, and acyclicity.
+
+### 6.1 `WarpgroupProgram`
+
+The authored document has format `tilefoundry.warpgroup_program.v1` and exactly
+these top-level fields:
+
+| Field | Meaning |
+| --- | --- |
+| `format` | Selects this program grammar. |
+| `warp_groups` | Gives the positive number of anonymous scheduling lanes available later. |
+| `types` | Maps type IDs to `shape`, `dtype`, and `space`. |
+| `inputs` | Declares SSA values defined outside the loop body. |
+| `loop` | Gives one explicit finite loop. |
+
+The program MUST NOT contain time units, durations, resource capacities,
+operation resource demands, lane assignments, synchronization, an objective,
+phases, implementations, target roles, warp IDs, tile IDs, barrier data, or an
+explicit dependency field. Neither `inputs` order nor `loop.ops` order has
+scheduling meaning.
+
+A loop has exactly `index`, `iterations`, `iter_args`, and `ops`.
+`iterations` is positive. The index is an implicit integer scalar and is not a
+declared tensor type. Each iter arg has exactly `id`, `init`, and `yield`:
+`yield` names a loop-body SSA definition, the iter arg has that definition's
+type, and the yielded value becomes the iter arg in the next iteration. `init`
+is either an external SSA value of exactly that type or a scalar literal
+broadcast to the yielded tensor shape.
+
+An authored operation has exactly `id` and `outputs`. Each output has exactly
+`id`, `type`, and `expr`. Multiple outputs of one operation are atomic at this
+boundary. IDs, input SSA definitions, iter args, and output SSA definitions are
+unique across their applicable namespaces. Every use and yield MUST resolve
+independently of array order, and the complete output-expression graph MUST be
+acyclic. Operation dependencies are the canonical SSA def-use relation: a body
+definition to a body use has distance zero, while a yielded definition to a
+next-iteration iter-arg use has distance one. This relation is derived and is
+never serialized as a program field.
+
+### 6.2 Types and expressions
+
+Tensor shapes contain positive integer extents. The supported storage spaces
+are exactly `register`, `shared`, and `global`:
+
+- `register` is local to the warpgroup lane that eventually owns its def-use
+  component.
+- `shared` may cross warpgroup lanes and each loop-body shared definition is
+  one logical allocation reused at the same body position in later iterations.
+- `global` is external storage and therefore may be referenced by inputs but
+  MUST NOT be defined by a loop-body output.
+
+The supported dtypes are `i1`, signed and unsigned 8/16/32/64-bit integers,
+`fp8_e4m3fn`, `fp8_e5m2`, `fp16`, `bf16`, `fp32`, and `fp64`. Expressions use
+JSON arrays whose first item is one of these operators:
+
+| Form | Static type rule |
+| --- | --- |
+| `["index", source, index, ...]` | Removes one leading source dimension per index; static indices and the finite loop-index range MUST be in bounds. |
+| `["copy", value]` | Preserves shape and dtype; the declared output selects the destination space. |
+| `["cast", value]` | Preserves shape and space; the declared output selects the destination dtype. |
+| `["matmul", lhs, rhs]` | Requires rank-two matching contracting dimensions and matching input dtypes; the declared output gives the result/accumulation dtype and MUST remain in the operands' floating or non-boolean integer family. |
+| `["transpose", value]` | Requires rank two and exchanges the two extents. |
+| `["concat", axis, value, ...]` | Requires at least two equal-rank operands with matching dtype, space, and non-axis extents. |
+| `["select", condition, true, false]` | Requires an `i1` condition and singleton-broadcastable result values. |
+| `["reduce", operator, axis, value]` | Supports `sum` and `max`, keeps the reduced axis with extent one, and requires an in-range axis. |
+| `["add", value, ...]`, `["mul", value, ...]`, `["max", value, ...]` | Require at least two same-dtype operands with ordinary trailing singleton broadcasting. |
+| `["sub", left, right]` | Requires exactly two same-dtype singleton-broadcastable operands. |
+| `["exp", value]` | Requires exactly one floating operand and preserves its broadcast shape and dtype. |
+
+Finite JSON numbers are scalar literals. The string `"-inf"` is the sole
+non-finite scalar token and is valid only for a floating result. A scalar may
+broadcast to any tensor shape. Every computed operator other than `copy` and
+`cast` produces a register value. Shape, dtype, space, index, axis, and
+broadcast errors MUST be rejected while constructing the program or problem.
+This is a kernel-independent scheduling rule: computation first materializes a
+lane-local register value, and publication to `shared` storage requires an
+explicit `copy` output whose def-use may cross lanes.
+
+### 6.3 `WarpgroupProblem`
+
+The closed document has format `tilefoundry.warpgroup_problem.v1` and exactly
+these top-level fields:
+
+| Field | Meaning |
+| --- | --- |
+| `format` | Selects this problem grammar. |
+| `time_unit` | Gives one ASCII identifier for every duration and timestamp. |
+| `warp_groups` | Carries the authored positive lane bound. |
+| `resources` | Maps temporal-resource IDs to positive integer capacities. |
+| `types` | Carries the validated semantic type table. |
+| `inputs` | Carries the validated external SSA definitions. |
+| `loop` | Carries the same finite loop with closed operation costs. |
+
+Each problem operation has exactly `id`, `outputs`, `duration`, and
+`resources`. Duration and every resource demand are positive integers. A demand
+names one declared capacity and MUST NOT exceed it. The problem contains all
+numeric facts consumed by a finite solver, but no callback, Target, CUDA value,
+profile store, implementation catalog, OR-Tools object, objective field,
+explicit dependency field, lane, synchronization, or hardware role.
+
+Program-to-problem cost closure is a separate operation. Constructing or
+decoding either document performs only the static type, SSA, loop, storage, and
+numeric validation described here. It does not assign a lane, emit a
+synchronization relation, or choose operation times.
+
+### 6.4 Cost closure
+
+`build_warpgroup_problem(program, cost_library)` is the sole program-to-problem
+closure. The library declares one ASCII `time_unit`, immutable positive integer
+resource capacities, and an exact lookup from `OperationSignature` to one
+positive integer duration plus immutable positive integer resource demands.
+There is no default, estimated, nearest, or fallback cost.
+
+An `OperationSignature` has exactly these semantic fields:
+
+| Field | Meaning |
+| --- | --- |
+| `kind` | One of `compute`, `view`, or `copy`; `index`, `transpose`, and `concat` are views, explicit `copy` is copy work, and casts and arithmetic are compute work. |
+| `operands` | First-use-ordered input value types, each containing only shape, dtype, and memory space. |
+| `outputs` | An identity-free ordered forest of complete expression trees paired with every output shape, dtype, and memory space. |
+
+Expression trees preserve operators, constants, axes, static indices, loop-index
+positions, operand aliasing, and nested output references. They replace external
+SSA uses with positional references and replace the loop-index spelling with one
+semantic token. Output ordering is canonical by typed expression content. An
+operation ID, SSA spelling, loop-index spelling, type alias, or kernel role MUST
+NOT affect the signature. Any change to an operator, constant, axis, shape,
+dtype, memory space, operand aliasing relation, or output set MUST affect it.
+
+One build queries each distinct signature once. Missing exact signatures are
+collected and reported together, while an ambiguous exact entry fails
+immediately. Either every operation closes or no `WarpgroupProblem` is returned.
+On success, the builder copies all durations, demands, capacities, and the time
+unit into the existing immutable problem records. The returned problem retains
+no library, callback, Target, CUDA value, profile store, standalone costmodel
+object, or unresolved signature.
+
+### 6.5 `WarpgroupSchedule`
+
+A successful document has format `tilefoundry.warpgroup_schedule.v1` and
+exactly four top-level fields: `format`, `lanes`, `sync`, and `times`.
+
+`lanes` is an array of ordered operation-ID arrays, one per anonymous
+warpgroup. `sync` contains unique records with exactly `after`, `before`, and a
+non-negative loop `distance`. A record states completion-to-start ordering:
+`end(i, after) <= start(i + distance, before)` whenever the destination
+iteration is in range. A distance-zero self edge is invalid.
+
+Each `times` row is exactly `[iteration, operation_id, start, end]`. Iteration
+and start are non-negative integers and `end` is greater than `start`.
+Duplicate timed instances are invalid. The row does not repeat a lane, and the
+document does not repeat a derived makespan or add status, proof, barriers,
+phases, implementations, hardware roles, or profile provenance.
+
+The schedule decoder and model reject malformed IDs, repeated operations across
+lanes, duplicate synchronization edges or timed instances, distance-zero self
+edges, and non-positive intervals. Constraints that require the closed problem,
+including operation coverage, duration, dependency and lane locality,
+synchronization reachability, resource feasibility, shared-allocation reuse,
+and acyclicity, belong to the independent schedule verifier.
+
+`export_warpgroup_schedule(problem, result)` is the sole finite-result export.
+It copies the solved lanes and times, derives synchronization candidates only
+for cross-lane shared def-use, loop-carried shared handoff, and next-iteration
+shared-allocation reuse, and emits no register or same-lane ordering edge.
+For a loop-carried shared iter arg, the external `init` is ready at the loop
+boundary: its users in iteration zero need not precede or follow that
+iteration's body definition. In every iteration `i >= 1`, all users of the
+value yielded by iteration `i - 1` MUST complete before the same logical
+allocation is redefined in iteration `i`; the normal yielded-definition to
+next-iteration-user SSA relation also remains in force. Because the compact
+sync record applies uniformly to every in-range iteration, the conditional
+`i >= 1` overwrite relation is a problem-aware finite semantic edge rather
+than a new sync-record variant.
+Lane adjacency and the last-to-first edge between consecutive iterations are
+implicit control edges. A synchronization candidate may be removed only when
+every one of its finite expanded instances remains reachable through those lane
+edges and the other emitted synchronization records. The candidate being
+removed, an unexported solver order, or an unexported cross-lane SSA edge MUST
+NOT be used to prove that candidate redundant.
+
+`verify_warpgroup_schedule(problem, schedule)` is independent of the solver and
+MUST NOT import or invoke OR-Tools. It checks exact operation and finite-instance
+coverage, declared durations, fixed lane order within and across iterations,
+register locality, SSA and shared completion-before-start, cross-lane shared
+reachability through lane and synchronization edges, shared-allocation reuse,
+synchronization inequalities, resource capacities, and acyclicity of the finite
+lane, synchronization, and semantic graph. This includes the conditional
+carried-shared overwrite edge for each iteration `i >= 1`, without imposing it
+on the boundary-ready iteration-zero init. Verification does not reconstruct a
+schedule, trust times as the control relation, or accept an unknown operation,
+extra time row, duplicate instance, or out-of-range iteration.
+
+### 6.6 End-to-end workflow
+
+`schedule_warpgroups(source, cost_library=None, *, timeout_seconds=60.0)` is the
+single combined Python workflow. With an exact `WarpgroupProgram`, it requires
+a cost library and performs cost closure before solving. With an exact already
+closed `WarpgroupProblem`, it rejects a cost library and solves the replayable
+numeric document directly. Other root types are invalid. Both paths call the
+same finite solver, synchronization exporter, and independent verifier; no
+partial schedule is returned after an error.
+
+The immutable `WarpgroupScheduleResult` contains the existing solve status, the
+verified `WarpgroupSchedule`, and a makespan derived from the maximum schedule
+end time. It retains no library, callback, Target, CUDA value, profile store,
+OR-Tools model, or solver object. Importing the typed or combined boundary does
+not load OR-Tools; only an actual solve crosses that lazy backend boundary.
+
+The `tilefoundry schedule` command retains its authored-HIR form:
+
+```text
+tilefoundry schedule SOURCE --topology LEVEL
+```
+
+It additionally accepts exactly one explicit warpgroup JSON path:
+
+```text
+tilefoundry schedule --warpgroup-program PROGRAM.json --fixture-costs
+tilefoundry schedule --warpgroup-problem PROBLEM.json
+```
+
+HIR source and warpgroup JSON are mutually exclusive, and `--topology` remains
+required only for HIR. A program requires the explicit `--fixture-costs` flag;
+those illustrative integer costs are design fixtures, not B200 calibration. A
+closed problem rejects that flag because it already owns every numeric cost.
+The command uses the strict program/problem codecs and the combined workflow.
+
+With `--json`, output is the unchanged canonical four-field schedule document.
+Text output is a deterministic view of the same typed result: lane number and
+body order, every iteration interval, synchronization edges, status, and the
+derived makespan. Text rendering does not recompute timing or create another
+schedule model. Existing HIR scheduling is not adapted to this boundary.

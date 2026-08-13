@@ -107,6 +107,12 @@ def _run(argv: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     """*argv* to completion, with no ``PYTHONPATH`` for it to read a checkout by."""
     environment = dict(os.environ)
     environment.pop("PYTHONPATH", None)
+    dependency_lib = Path(sys.prefix) / "lib"
+    for variable in ("DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"):
+        paths = [str(dependency_lib)]
+        if environment.get(variable):
+            paths.append(environment[variable])
+        environment[variable] = os.pathsep.join(paths)
     return subprocess.run(
         [str(part) for part in argv],
         cwd=str(cwd),
@@ -136,6 +142,13 @@ def installation(tmp_path_factory) -> Path:
         done = _run(argv, build)
         if done.returncode != 0:
             pytest.fail(f"{' '.join(str(p) for p in argv)}\n{done.stderr}")
+    version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    dependency_site = Path(sys.prefix) / "lib" / version / "site-packages"
+    if dependency_site.is_dir():
+        target_site = venv / "lib" / version / "site-packages"
+        (target_site / "test-dependencies.pth").write_text(
+            f"{dependency_site}\n", encoding="utf-8"
+        )
     built = sorted(wheels.glob("tilefoundry-*.whl"))
     if len(built) != 1:
         pytest.fail(f"expected one wheel in {wheels}, found {len(built)}")
