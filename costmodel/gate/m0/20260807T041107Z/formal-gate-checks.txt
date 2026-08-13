@@ -1,0 +1,25 @@
+=== git diff --check ===
+=== plan finalizer reviewer check ===
+=== spec rules ===
+=== spec refs ===
+=== spec entropy ===
+Traceback (most recent call last):
+  File "/Users/mi/Desktop/b200_workspace/TileFoundry/scripts/spec_entropy_lint.py", line 134, in <module>
+    raise SystemExit(main(sys.argv[1:]))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/Users/mi/Desktop/b200_workspace/TileFoundry/scripts/spec_entropy_lint.py", line 124, in main
+    files.extend([r] if r.is_file() else sorted(r.rglob("*.py")))
+                        ^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_4/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py", line 892, in is_file
+    return S_ISREG(self.stat().st_mode)
+                   ^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_4/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py", line 840, in stat
+    return os.stat(self, follow_symlinks=follow_symlinks)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 63] File name too long: 'costmodel/src/tilefoundry_costmodel/__init__.py\ncostmodel/src/tilefoundry_costmodel/__main__.py\ncostmodel/src/tilefoundry_costmodel/_immutable.py\ncostmodel/src/tilefoundry_costmodel/_serialization.py\ncostmodel/src/tilefoundry_costmodel/api.py\ncostmodel/src/tilefoundry_costmodel/cli.py\ncostmodel/src/tilefoundry_costmodel/constants.py\ncostmodel/src/tilefoundry_costmodel/errors.py\ncostmodel/src/tilefoundry_costmodel/hardware/__init__.py\ncostmodel/src/tilefoundry_costmodel/hardware/model.py\ncostmodel/src/tilefoundry_costmodel/hardware/registry.py\ncostmodel/src/tilefoundry_costmodel/implementations/__init__.py\ncostmodel/src/tilefoundry_costmodel/language.py\ncostmodel/src/tilefoundry_costmodel/legacy/__init__.py\ncostmodel/src/tilefoundry_costmodel/legacy/cpsat_solver.py\ncostmodel/src/tilefoundry_costmodel/legacy/list_solver.py\ncostmodel/src/tilefoundry_costmodel/legacy/model.py\ncostmodel/src/tilefoundry_costmodel/legacy/solver.py\ncostmodel/src/tilefoundry_costmodel/model.py\ncostmodel/src/tilefoundry_costmodel/profiles/__init__.py\ncostmodel/src/tilefoundry_costmodel/profiles/model.py\ncostmodel/src/tilefoundry_costmodel/profiles/schema.py\ncostmodel/src/tilefoundry_costmodel/profiles/store.py\ncostmodel/src/tilefoundry_costmodel/program.py\ncostmodel/src/tilefoundry_costmodel/request.py\ncostmodel/src/tilefoundry_costmodel/result.py\ncostmodel/src/tilefoundry_costmodel/schema.py\ncostmodel/src/tilefoundry_costmodel/search_space.py\ncostmodel/src/tilefoundry_costmodel/solver/__init__.py\ncostmodel/src/tilefoundry_costmodel/solver/model.py\ncostmodel/src/tilefoundry_costmodel/workloads/__init__.py\ncostmodel/tests/test_api.py\ncostmodel/tests/test_solver.py'
+=== forward references ===
+=== comment hygiene ===
+=== no machine paths ===
+=== english only ===
+=== touched C++/CUDA ===
+none

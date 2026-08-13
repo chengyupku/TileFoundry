@@ -1,24 +1,43 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "tilefoundry-costmodel"
-version = "0.2.0"
-description = "Lightweight resource-constrained pipeline scheduling interfaces for TileFoundry."
+version = "2.0.0"
+description = "Standalone compiler-independent B200 single-CTA cost model."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
-cpsat = ["ortools>=9.10"]
+cpsat = ["ortools>=9.15,<10"]
+cuda = ["cuda-python>=12.8,<13"]
+test = [
+    "jsonschema>=4.23,<5",
+    "mypy>=1.15,<2",
+    "pytest>=8,<10",
+    "pytest-cov>=6,<8",
+    "ruff>=0.11,<1",
+]
+
+[project.scripts]
+tilefoundry-costmodel = "tilefoundry_costmodel.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+tilefoundry_costmodel = ["implementations/b200/cuda/*.cu", "profiler/cuda/*.cu"]
+
+[tool.setuptools.data-files]
+"share/tilefoundry-costmodel/schemas" = ["schemas/*.json"]
+"share/tilefoundry-costmodel/calibration" = ["calibration/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--strict-markers"
+pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
@@ -26,3 +45,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]

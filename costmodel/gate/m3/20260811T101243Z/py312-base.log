@@ -1,0 +1,27 @@
+Python 3.12.13
+Processing ./costmodel/gate/m3/20260811T101243Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl
+Installing collected packages: tilefoundry-costmodel
+Successfully installed tilefoundry-costmodel-2.0.0
+No broken requirements found.
+pip==26.1.2
+tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m3/20260811T101243Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl#sha256=75230665638482ce8cffadda9f392c10d48615733feef894dc5ec08e53a984a2
+root=/private/tmp/tilefoundry-m3-final-py312-base/lib/python3.12/site-packages/tilefoundry_costmodel/__init__.py
+version=2.0.0
+new_optional_or_legacy_modules=[]
+2.0.0
+usage: tilefoundry-costmodel [-h] [--version]
+                             {build,solve,search,profile,profiles} ...
+
+TileFoundry B200 cost model
+
+positional arguments:
+  {build,solve,search,profile,profiles}
+    build               build a replayable search problem
+    solve               solve a replayable search problem
+    search              build and solve a request
+    profile             measure missing profiles on a local B200
+    profiles            inspect profile snapshots
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit

@@ -1,0 +1,221 @@
+{
+  "version": "1",
+  "pip_version": "26.1.2",
+  "install": [
+    {
+      "download_info": {
+        "url": "file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl",
+        "archive_info": {
+          "hashes": {
+            "sha256": "57058acb41622f7119da2389d96c9345df0523f5f355a83774a9559d9b2e949a"
+          },
+          "hash": "sha256=57058acb41622f7119da2389d96c9345df0523f5f355a83774a9559d9b2e949a"
+        }
+      },
+      "is_direct": true,
+      "is_yanked": false,
+      "requested": true,
+      "metadata": {
+        "metadata_version": "2.4",
+        "name": "tilefoundry-costmodel",
+        "version": "2.0.0",
+        "summary": "Standalone compiler-independent B200 single-CTA cost model.",
+        "description": "# TileFoundry Cost Model\n\n`tilefoundry-costmodel` is the standalone B200 single-CTA cost-model package.\nThe public contract is API `(2, 0)` and is defined exclusively by\n`docs/spec/cost-model.md`.\n\n## Version 2 workflow\n\nVersion 2 carries a typed `TileProgram` in a `CostModelRequest`, resolves an\nexact profile snapshot at the build boundary, and then solves a replayable\n`SearchProblem`:\n\n```text\nTileProgram -> build(request) -> SearchProblem -> solve(problem) -> CostModelResult\n```\n\nThe stable command names are:\n\n```text\ntilefoundry-costmodel build --request REQUEST.json --profiles PROFILES.db --output PROBLEM.json\ntilefoundry-costmodel solve --problem PROBLEM.json --output PLAN.json\ntilefoundry-costmodel search --request REQUEST.json --profiles PROFILES.db --output PLAN.json\n```\n\nThe base installation has no runtime dependencies. Optional capabilities are\nexplicit:\n\n```bash\npython -m pip install -e '/path/to/TileFoundry/costmodel[cpsat]'\npython -m pip install -e '/path/to/TileFoundry/costmodel[cuda]'\npython -m pip install -e '/path/to/TileFoundry/costmodel[test]'\n```\n\nImporting `tilefoundry_costmodel` does not import OR-Tools, CUDA Python, a CUDA\ndriver, or a GPU. Timing and solver capabilities are loaded only by the\nmilestones that implement them.\n\n## Legacy migration\n\nThe fixed-stage API `(0, 2)` remains available only under\n`tilefoundry_costmodel.legacy` while callers migrate:\n\n```python\nfrom tilefoundry_costmodel.legacy import (\n    CpSatPipelineSolver,\n    ListPipelineSolver,\n    PipelineHardware,\n    PipelineProblem,\n    Precedence,\n    ResourceDemand,\n    ResourceSpec,\n    StageSpec,\n)\n```\n\nLegacy records and solver statuses retain their old nanosecond/resource\nsemantics. New integrations must import the version-2 root and check\n`COST_MODEL_API_VERSION == (2, 0)`; root imports of `StageSpec` and the legacy\nsolver classes are intentionally unsupported.\n",
+        "description_content_type": "text/markdown",
+        "requires_dist": [
+          "ortools<10,>=9.15; extra == \"cpsat\"",
+          "cuda-python<13,>=12.8; extra == \"cuda\"",
+          "mypy<2,>=1.15; extra == \"test\"",
+          "pytest<10,>=8; extra == \"test\"",
+          "pytest-cov<8,>=6; extra == \"test\"",
+          "ruff<1,>=0.11; extra == \"test\""
+        ],
+        "requires_python": ">=3.11",
+        "provides_extra": [
+          "cpsat",
+          "cuda",
+          "test"
+        ]
+      },
+      "requested_extras": [
+        "cuda"
+      ]
+    },
+    {
+      "download_info": {
+        "url": "file:///tmp/tilefoundry-m0-cuda-linux-py312/cuda_python-12.9.7-py3-none-any.whl",
+        "archive_info": {
+          "hashes": {
+            "sha256": "23a1fc406d491eef7a7e985095725cb7b20a04a7bd9b7a66400e5c86e082e0aa"
+          },
+          "hash": "sha256=23a1fc406d491eef7a7e985095725cb7b20a04a7bd9b7a66400e5c86e082e0aa"
+        }
+      },
+      "is_direct": false,
+      "is_yanked": false,
+      "requested": false,
+      "metadata": {
+        "metadata_version": "2.4",
+        "name": "cuda-python",
+        "version": "12.9.7",
+        "dynamic": [
+          "license-file",
+          "provides-extra",
+          "requires-dist"
+        ],
+        "summary": "CUDA Python: Performance meets Productivity",
+        "description": ".. SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n.. SPDX-License-Identifier: LicenseRef-NVIDIA-SOFTWARE-LICENSE\n\n**************************************************************\ncuda-python: Metapackage collection of CUDA Python subpackages\n**************************************************************\n\nCUDA Python is the home for accessing NVIDIA's CUDA platform from Python. It consists of multiple components:\n\n* `cuda.core <https://nvidia.github.io/cuda-python/cuda-core/latest>`_: Pythonic access to CUDA Runtime and other core functionalities\n* `cuda.bindings <https://nvidia.github.io/cuda-python/cuda-bindings/latest>`_: Low-level Python bindings to CUDA C APIs\n* `cuda.cooperative <https://nvidia.github.io/cccl/cuda_cooperative/>`_: A Python package providing CCCL's reusable block-wide and warp-wide *device* primitives for use within Numba CUDA kernels\n* `cuda.parallel <https://nvidia.github.io/cccl/cuda_parallel/>`_: A Python package for easy access to CCCL's highly efficient and customizable parallel algorithms, like `sort`, `scan`, `reduce`, `transform`, etc, that are callable on the *host*\n* `numba.cuda <https://nvidia.github.io/numba-cuda/>`_: Numba's target for CUDA GPU programming by directly compiling a restricted subset of Python code into CUDA kernels and device functions following the CUDA execution model.\n\nFor access to NVIDIA CPU & GPU Math Libraries, please refer to `nvmath-python <https://docs.nvidia.com/cuda/nvmath-python/latest>`_.\n\nCUDA Python is currently undergoing an overhaul to improve existing and bring up new components. All of the previously available functionalities from the `cuda-python` package will continue to be available, please refer to the `cuda.bindings <https://nvidia.github.io/cuda-python/cuda-bindings/latest>`_ documentation for installation guide and further detail.\n\ncuda-python as a metapackage\n============================\n\n`cuda-python` is now a metapackage that contains a collection of subpackages. Each subpackage is versioned independently, allowing installation of each component as needed.\n\nSubpackage: cuda.core\n---------------------\n\nThe `cuda.core` package offers idiomatic, pythonic access to CUDA Runtime and other functionalities.\n\nThe goals are to\n\n1. Provide **idiomatic (\"pythonic\")** access to CUDA Driver, Runtime, and JIT compiler toolchain\n2. Focus on **developer productivity** by ensuring end-to-end CUDA development can be performed quickly and entirely in Python\n3. **Avoid homegrown** Python abstractions for CUDA for new Python GPU libraries starting from scratch\n4. **Ease** developer **burden of maintaining** and catching up with latest CUDA features\n5. **Flatten the learning curve** for current and future generations of CUDA developers\n\nSubpackage: cuda.bindings\n-------------------------\n\nThe `cuda.bindings` package is a standard set of low-level interfaces, providing full coverage of and access to the CUDA host APIs from Python.\n\nThe list of available interfaces are:\n\n* CUDA Driver\n* CUDA Runtime\n* NVRTC\n* nvJitLink\n* NVVM\n",
+        "description_content_type": "text/x-rst",
+        "author_email": "NVIDIA Corporation <cuda-python-conduct@nvidia.com>",
+        "license_expression": "LicenseRef-NVIDIA-SOFTWARE-LICENSE",
+        "license_file": [
+          "LICENSE"
+        ],
+        "classifier": [
+          "Operating System :: POSIX :: Linux",
+          "Operating System :: Microsoft :: Windows",
+          "Topic :: Software Development :: Libraries",
+          "Topic :: Education",
+          "Topic :: Scientific/Engineering",
+          "Intended Audience :: Developers",
+          "Intended Audience :: Science/Research",
+          "Intended Audience :: End Users/Desktop",
+          "Programming Language :: Python :: 3 :: Only",
+          "Programming Language :: Python :: 3.10",
+          "Programming Language :: Python :: 3.11",
+          "Programming Language :: Python :: 3.12",
+          "Programming Language :: Python :: 3.13",
+          "Programming Language :: Python :: 3.14",
+          "Programming Language :: Python :: Implementation :: CPython",
+          "Environment :: GPU :: NVIDIA CUDA",
+          "Environment :: GPU :: NVIDIA CUDA :: 12"
+        ],
+        "requires_dist": [
+          "cuda-bindings~=12.9.7",
+          "cuda-bindings[all]~=12.9.7; extra == \"all\""
+        ],
+        "project_url": [
+          "homepage, https://nvidia.github.io/cuda-python/",
+          "documentation, https://nvidia.github.io/cuda-python/",
+          "repository, https://github.com/NVIDIA/cuda-python/",
+          "issues, https://github.com/NVIDIA/cuda-python/issues/"
+        ],
+        "provides_extra": [
+          "all"
+        ]
+      }
+    },
+    {
+      "download_info": {
+        "url": "file:///tmp/tilefoundry-m0-cuda-linux-py312/cuda_bindings-12.9.7-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl",
+        "archive_info": {
+          "hashes": {
+            "sha256": "4c7ef48c5e13ae90f3b2ecfb72f8e99ac43c8f4c43e67e1325b8aae331453687"
+          },
+          "hash": "sha256=4c7ef48c5e13ae90f3b2ecfb72f8e99ac43c8f4c43e67e1325b8aae331453687"
+        }
+      },
+      "is_direct": false,
+      "is_yanked": false,
+      "requested": false,
+      "metadata": {
+        "metadata_version": "2.4",
+        "name": "cuda-bindings",
+        "version": "12.9.7",
+        "dynamic": [
+          "license-file"
+        ],
+        "summary": "Python bindings for CUDA",
+        "description": ".. SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n.. SPDX-License-Identifier: LicenseRef-NVIDIA-SOFTWARE-LICENSE\n\n****************************************\ncuda-bindings: Low-level CUDA interfaces\n****************************************\n\n`cuda.bindings <https://nvidia.github.io/cuda-python/cuda-bindings/>`_ is a standard set of low-level interfaces, providing full coverage of and 1:1 access to the CUDA host APIs from Python. Checkout the `Overview <https://nvidia.github.io/cuda-python/cuda-bindings/latest/overview.html>`_ for the workflow and performance results.\n\n* `Repository <https://github.com/NVIDIA/cuda-python/tree/main/cuda_bindings>`_\n* `Documentation <https://nvidia.github.io/cuda-python/cuda-bindings/>`_\n* `Examples <https://github.com/NVIDIA/cuda-python/tree/main/cuda_bindings/examples>`_\n* `Issue tracker <https://github.com/NVIDIA/cuda-python/issues/>`_\n\nFor the installation instruction, please refer to the `Installation <https://nvidia.github.io/cuda-python/cuda-bindings/latest/install.html>`_ page.\n",
+        "description_content_type": "text/x-rst",
+        "author_email": "NVIDIA Corporation <cuda-python-conduct@nvidia.com>",
+        "license_expression": "LicenseRef-NVIDIA-SOFTWARE-LICENSE",
+        "license_file": [
+          "LICENSE"
+        ],
+        "classifier": [
+          "Intended Audience :: Developers",
+          "Topic :: Database",
+          "Topic :: Scientific/Engineering",
+          "Programming Language :: Python",
+          "Programming Language :: Python :: 3.9",
+          "Programming Language :: Python :: 3.10",
+          "Programming Language :: Python :: 3.11",
+          "Programming Language :: Python :: 3.12",
+          "Programming Language :: Python :: 3.13",
+          "Environment :: GPU :: NVIDIA CUDA"
+        ],
+        "requires_dist": [
+          "cuda-pathfinder~=1.1",
+          "nvidia-cuda-nvcc-cu12; extra == \"all\"",
+          "nvidia-cuda-nvrtc-cu12; extra == \"all\"",
+          "nvidia-nvjitlink-cu12>=12.3; extra == \"all\"",
+          "nvidia-nvfatbin-cu12; extra == \"all\"",
+          "nvidia-cufile-cu12; sys_platform == \"linux\" and extra == \"all\"",
+          "cython<3.3,>=3.2; extra == \"test\"",
+          "setuptools>=77.0.0; extra == \"test\"",
+          "numpy>=1.21.1; extra == \"test\"",
+          "pytest>=6.2.4; extra == \"test\"",
+          "pytest-benchmark>=3.4.1; extra == \"test\"",
+          "pyglet>=2.1.9; extra == \"test\""
+        ],
+        "project_url": [
+          "Repository, https://github.com/NVIDIA/cuda-python",
+          "Documentation, https://nvidia.github.io/cuda-python/"
+        ],
+        "provides_extra": [
+          "all",
+          "test"
+        ]
+      }
+    },
+    {
+      "download_info": {
+        "url": "file:///tmp/tilefoundry-m0-cuda-linux-py312/cuda_pathfinder-1.6.0-py3-none-any.whl",
+        "archive_info": {
+          "hashes": {
+            "sha256": "1503af579d8379c24bdd65528379bc57039b0455be9f5f9686cf8e473a1fce51"
+          },
+          "hash": "sha256=1503af579d8379c24bdd65528379bc57039b0455be9f5f9686cf8e473a1fce51"
+        }
+      },
+      "is_direct": false,
+      "is_yanked": false,
+      "requested": false,
+      "metadata": {
+        "metadata_version": "2.4",
+        "name": "cuda-pathfinder",
+        "version": "1.6.0",
+        "dynamic": [
+          "license-file"
+        ],
+        "summary": "Pathfinder for CUDA components",
+        "description": ".. SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n.. SPDX-License-Identifier: Apache-2.0\n\n*******************************************************\ncuda-pathfinder: Utilities for locating CUDA components\n*******************************************************\n\n.. image:: https://img.shields.io/badge/NVIDIA-black?logo=nvidia\n   :target: https://www.nvidia.com/\n   :alt: NVIDIA\n\n`cuda.pathfinder <https://nvidia.github.io/cuda-python/cuda-pathfinder/>`_\naims to be a one-stop solution for locating CUDA components. Currently\nit supports locating and loading dynamic libraries (``.so``, ``.dll``), and\nlocating CTK header directories. Support for other artifacts is in progress.\n\n* `Documentation <https://nvidia.github.io/cuda-python/cuda-pathfinder/>`_\n* `Releases <https://nvidia.github.io/cuda-python/cuda-pathfinder/latest/release.html>`_\n* `Repository <https://github.com/NVIDIA/cuda-python/tree/main/cuda_pathfinder/>`_\n* `Issue tracker <https://github.com/NVIDIA/cuda-python/issues/>`_ (select component ``cuda.pathfinder``)\n\n``cuda.pathfinder`` is under active development. Feedback and suggestions are welcome.\n\n\nInstallation\n============\n\n.. code-block:: bash\n\n   pip install cuda-pathfinder\n\n``cuda-pathfinder`` is `CUDA Toolkit (CTK) <https://developer.nvidia.com/cuda-toolkit>`_\nversion-agnostic. It follows the general CUDA Toolkit support policy: the\ntwo most recent major versions are supported simultaneously.\n",
+        "description_content_type": "text/x-rst",
+        "author_email": "NVIDIA Corporation <cuda-python-conduct@nvidia.com>",
+        "license_expression": "Apache-2.0",
+        "license_file": [
+          "LICENSE"
+        ],
+        "requires_python": ">=3.10",
+        "project_url": [
+          "Repository, https://github.com/NVIDIA/cuda-python",
+          "Documentation, https://nvidia.github.io/cuda-python/"
+        ]
+      }
+    }
+  ],
+  "environment": {
+    "implementation_name": "cpython",
+    "implementation_version": "3.12.13",
+    "os_name": "posix",
+    "platform_machine": "arm64",
+    "platform_release": "24.6.0",
+    "platform_system": "Darwin",
+    "platform_version": "Darwin Kernel Version 24.6.0: Mon Jul 14 11:30:40 PDT 2025; root:xnu-11417.140.69~1/RELEASE_ARM64_T6041",
+    "python_full_version": "3.12.13",
+    "platform_python_implementation": "CPython",
+    "python_version": "3.12",
+    "sys_platform": "darwin"
+  }
+}

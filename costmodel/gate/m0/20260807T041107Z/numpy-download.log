@@ -1,0 +1,5 @@
+Collecting numpy==2.5.1
+  Using cached numpy-2.5.1-cp312-cp312-macosx_14_0_arm64.whl.metadata (6.6 kB)
+Using cached numpy-2.5.1-cp312-cp312-macosx_14_0_arm64.whl (5.3 MB)
+Saved /private/tmp/numpy-download/numpy-2.5.1-cp312-cp312-macosx_14_0_arm64.whl
+Successfully downloaded numpy

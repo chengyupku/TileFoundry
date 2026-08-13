@@ -1,0 +1,33 @@
+python=/opt/homebrew/bin/python3.12
+Python 3.12.13
+Looking in links: /tmp/tilefoundry-m0-wheelhouse-py312-cpsat
+Processing ./costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl (from tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/ortools-9.15.6755-cp312-cp312-macosx_11_0_arm64.whl (from tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/absl_py-2.5.0-py3-none-any.whl (from ortools<10,>=9.15->tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/numpy-2.5.1-cp312-cp312-macosx_14_0_arm64.whl (from ortools<10,>=9.15->tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/pandas-3.0.5-cp312-cp312-macosx_11_0_arm64.whl (from ortools<10,>=9.15->tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/protobuf-6.33.6-cp39-abi3-macosx_10_9_universal2.whl (from ortools<10,>=9.15->tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/typing_extensions-4.16.0-py3-none-any.whl (from ortools<10,>=9.15->tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/immutabledict-4.3.1-py3-none-any.whl (from ortools<10,>=9.15->tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/python_dateutil-2.9.0.post0-py2.py3-none-any.whl (from pandas>=2.0.0->ortools<10,>=9.15->tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Processing /tmp/tilefoundry-m0-wheelhouse-py312-cpsat/six-1.17.0-py2.py3-none-any.whl (from python-dateutil>=2.8.2->pandas>=2.0.0->ortools<10,>=9.15->tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->tilefoundry-costmodel[cpsat] @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl->-r /tmp/final-py312-cpsat.txt (line 1))
+Installing collected packages: typing-extensions, tilefoundry-costmodel, six, protobuf, numpy, immutabledict, absl-py, python-dateutil, pandas, ortools
+
+Successfully installed absl-py-2.5.0 immutabledict-4.3.1 numpy-2.5.1 ortools-9.15.6755 pandas-3.0.5 protobuf-6.33.6 python-dateutil-2.9.0.post0 six-1.17.0 tilefoundry-costmodel-2.0.0 typing-extensions-4.16.0
+--- pip check ---
+No broken requirements found.
+--- pip freeze ---
+absl-py==2.5.0
+immutabledict==4.3.1
+numpy==2.5.1
+ortools==9.15.6755
+pandas==3.0.5
+protobuf==6.33.6
+python-dateutil==2.9.0.post0
+six==1.17.0
+tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl#sha256=57058acb41622f7119da2389d96c9345df0523f5f355a83774a9559d9b2e949a
+typing_extensions==4.16.0
+--- root/lazy import ---
+2.0.0 lazy-import-ok
+--- final CP-SAT legacy smoke ---
+optimal 3.0

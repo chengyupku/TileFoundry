@@ -1,0 +1,6 @@
+=== /tmp/tilefoundry-m0-final-py311-base ===
+2.0.0
+cli-ok
+=== /tmp/tilefoundry-m0-final-py312-base ===
+2.0.0
+cli-ok

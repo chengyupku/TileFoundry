@@ -1,0 +1,30 @@
+Python 3.12.13
+No broken requirements found.
+absl-py==2.5.0
+coverage==7.15.4
+immutabledict==4.3.1
+iniconfig==2.3.0
+librt==0.15.0
+mypy==1.20.2
+mypy_extensions==1.1.0
+numpy==2.5.2
+ortools==9.15.6755
+packaging==26.3
+pandas==3.0.5
+pathspec==1.1.1
+pluggy==1.6.0
+protobuf==6.33.6
+Pygments==2.20.0
+pytest==9.1.1
+pytest-cov==7.1.0
+python-dateutil==2.9.0.post0
+ruff==0.16.2
+six==1.17.0
+tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m2/20260810T035607Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl#sha256=c0b5bb05d58b67698d6e6e02d4fe4bc08b0a58b42769c9703cd7e3b6dc57e04a
+typing_extensions==4.16.0
+module=/private/tmp/tf-m2-py312-test/lib/python3.12/site-packages/tilefoundry_costmodel/__init__.py
+[{"configuration_id":"49da4435847adab630489ce377de207ee1550654f923fda47e3f88c1426d88b1","pipeline_depth":2,"profile_keys":["4cf5ccb05a64bc7f0946c93d9f5a0e5aa3d7d926932a1ad546f6ec1bafa4b9ad"],"slot_count":2,"static_units":1024},{"configuration_id":"c1c889609a813fe7653ec20478e54ad6dde2519c60d81b11647c746e5464a5e7","pipeline_depth":3,"profile_keys":["ffafc87a8b0fe273c8ca7a236cbcaaf10142802cfce5df919869088122db5ee6"],"slot_count":3,"static_units":1536},{"configuration_id":"d85524c7c534017944fa67c808934d96e269f401baacd7a0310e7cda40df2958","pipeline_depth":1,"profile_keys":["df7145599d1353681e6a2cf77e09f698701cbf7fd592db926fa7b8b78c3fb622"],"slot_count":1,"static_units":512}]
+golden_sha256=1acaec7311fd9a1cb4795bf551693f4eaac5bdd333f06a146ae7007725bb72f7
+import_boundary=PASS
+.........................................................                [100%]
+57 passed in 1.13s

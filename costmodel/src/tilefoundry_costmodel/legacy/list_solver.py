@@ -5,6 +5,7 @@ from __future__ import annotations
 import heapq
 import math
 from collections import defaultdict
+from collections.abc import Mapping
 from typing import Dict, List, Optional, Tuple
 
 from .model import (
@@ -13,7 +14,6 @@ from .model import (
     PipelineSolution,
     Placement,
     SolveStatus,
-    StageSpec,
     TimingOracle,
 )
 
@@ -41,22 +41,24 @@ class ListPipelineSolver:
             timing = oracle.estimate(stage, hardware=hardware)
             duration = float(timing.duration_ns)
             if not math.isfinite(duration) or duration < 0:
-                return self._infeasible(
-                    f"stage {stage.name!r} has invalid duration {duration!r}")
+                return self._infeasible(f"stage {stage.name!r} has invalid duration {duration!r}")
             durations[stage.name] = duration
             for resource_demand in stage.resource_demands:
                 resource = resource_demand.resource
                 capacity = hardware.capacity(resource)
                 if capacity is None:
                     return self._infeasible(
-                        f"stage {stage.name!r} references unknown resource {resource!r}")
+                        f"stage {stage.name!r} references unknown resource {resource!r}"
+                    )
                 if capacity <= 0:
                     return self._infeasible(
-                        f"resource {resource!r} has non-positive capacity {capacity}")
+                        f"resource {resource!r} has non-positive capacity {capacity}"
+                    )
                 if resource_demand.demand > capacity:
                     return self._infeasible(
                         f"stage {stage.name!r} demand {resource_demand.demand} "
-                        f"exceeds resource {resource!r} capacity {capacity}")
+                        f"exceeds resource {resource!r} capacity {capacity}"
+                    )
 
         successors: Dict[str, List[Tuple[str, float]]] = defaultdict(list)
         predecessors: Dict[str, List[Tuple[str, float]]] = defaultdict(list)
@@ -65,11 +67,13 @@ class ListPipelineSolver:
         for edge in problem.precedences:
             if edge.src not in stages or edge.dst not in stages:
                 return self._infeasible(
-                    f"precedence {edge.src!r}->{edge.dst!r} references a missing stage")
+                    f"precedence {edge.src!r}->{edge.dst!r} references a missing stage"
+                )
             delay = float(edge.delay_ns)
             if not math.isfinite(delay) or delay < 0:
                 return self._infeasible(
-                    f"precedence {edge.src!r}->{edge.dst!r} has invalid delay {delay!r}")
+                    f"precedence {edge.src!r}->{edge.dst!r} has invalid delay {delay!r}"
+                )
             key = (edge.src, edge.dst, delay)
             if key in seen_edges:
                 continue
@@ -90,8 +94,8 @@ class ListPipelineSolver:
                 heapq.heappush(ready, (-bottom_level[name], name))
 
         lanes: Dict[str, List[Tuple[float, Optional[str]]]] = {}
-        for resource in hardware.resources:
-            lanes[resource.name] = [(0.0, None) for _ in range(resource.capacity)]
+        for resource_spec in hardware.resources:
+            lanes[resource_spec.name] = [(0.0, None) for _ in range(resource_spec.capacity)]
 
         start_ns: Dict[str, float] = {}
         end_ns: Dict[str, float] = {}
@@ -117,7 +121,7 @@ class ListPipelineSolver:
                 candidates = sorted(
                     enumerate(lanes[resource]),
                     key=lambda item: (item[1][0], item[0]),
-                )[:resource_demand.demand]
+                )[: resource_demand.demand]
                 selected_lanes.extend(
                     (resource, lane_index, available, previous)
                     for lane_index, (available, previous) in candidates
@@ -135,27 +139,29 @@ class ListPipelineSolver:
             start_ns[name] = start
             end_ns[name] = end
             critical_predecessor[name] = (
-                resource_pred if resource_ready > dependency_ready else dependency_pred)
+                resource_pred if resource_ready > dependency_ready else dependency_pred
+            )
             for resource, lane_index, _, _ in selected_lanes:
                 lanes[resource][lane_index] = (end, name)
-            placements.append(Placement(
-                stage=name,
-                group=stage.group,
-                iteration=stage.iteration,
-                start_ns=start,
-                end_ns=end,
-                resources=stage.resources,
-                resource_demands=stage.resource_demands,
-            ))
+            placements.append(
+                Placement(
+                    stage=name,
+                    group=stage.group,
+                    iteration=stage.iteration,
+                    start_ns=start,
+                    end_ns=end,
+                    resources=stage.resources,
+                    resource_demands=stage.resource_demands,
+                )
+            )
 
             for successor, _ in successors.get(name, ()):
                 remaining[successor] -= 1
                 if remaining[successor] == 0:
-                    heapq.heappush(
-                        ready, (-bottom_level[successor], successor))
+                    heapq.heappush(ready, (-bottom_level[successor], successor))
 
         makespan = max(end_ns.values(), default=0.0)
-        end_stage = max(end_ns, key=end_ns.get) if end_ns else None
+        end_stage = max(end_ns, key=lambda name: end_ns[name]) if end_ns else None
         critical_path = self._critical_path(end_stage, critical_predecessor)
         per_group: Dict[str, float] = defaultdict(float)
         for name, stage in stages.items():
@@ -163,13 +169,14 @@ class ListPipelineSolver:
 
         precedence_bound = max(bottom_level.values(), default=0.0)
         resource_bound = 0.0
-        for resource in hardware.resources:
+        for resource_spec in hardware.resources:
             busy = sum(
                 durations[stage.name] * resource_demand.demand
                 for stage in problem.stages
                 for resource_demand in stage.resource_demands
-                if resource_demand.resource == resource.name)
-            resource_bound = max(resource_bound, busy / resource.capacity)
+                if resource_demand.resource == resource_spec.name
+            )
+            resource_bound = max(resource_bound, busy / resource_spec.capacity)
 
         return PipelineSolution(
             status=SolveStatus.FEASIBLE,
@@ -181,7 +188,11 @@ class ListPipelineSolver:
         )
 
     @staticmethod
-    def _topological_order(stages, successors, indegree) -> Optional[List[str]]:
+    def _topological_order(
+        stages: Mapping[str, object],
+        successors: Mapping[str, List[Tuple[str, float]]],
+        indegree: Mapping[str, int],
+    ) -> Optional[List[str]]:
         pending = [name for name, degree in indegree.items() if degree == 0]
         heapq.heapify(pending)
         degrees = dict(indegree)
@@ -196,12 +207,15 @@ class ListPipelineSolver:
         return out if len(out) == len(stages) else None
 
     @staticmethod
-    def _bottom_levels(topo, successors, durations) -> Dict[str, float]:
+    def _bottom_levels(
+        topo: List[str],
+        successors: Mapping[str, List[Tuple[str, float]]],
+        durations: Mapping[str, float],
+    ) -> Dict[str, float]:
         levels: Dict[str, float] = {}
         for name in reversed(topo):
             tail = max(
-                (delay + levels[successor]
-                 for successor, delay in successors.get(name, ())),
+                (delay + levels[successor] for successor, delay in successors.get(name, ())),
                 default=0.0,
             )
             levels[name] = durations[name] + tail

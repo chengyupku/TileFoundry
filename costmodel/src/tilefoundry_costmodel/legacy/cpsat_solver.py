@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from decimal import Decimal, ROUND_CEILING
-from typing import Dict, List, Mapping, Optional, Tuple
+from decimal import ROUND_CEILING, Decimal
+from importlib import import_module
+from typing import Any, Dict, List, Mapping, Optional, Tuple, cast
 
 from .model import (
     PipelineHardware,
@@ -49,10 +50,7 @@ class CpSatPipelineSolver:
         return self.time_resolution_ps / 1000.0
 
     def _ticks(self, value_ns: float) -> int:
-        ticks = (
-            Decimal(str(value_ns)) * Decimal(1000)
-            / Decimal(self.time_resolution_ps)
-        )
+        ticks = Decimal(str(value_ns)) * Decimal(1000) / Decimal(self.time_resolution_ps)
         return int(ticks.to_integral_value(rounding=ROUND_CEILING))
 
     def _ns(self, ticks: int | float) -> float:
@@ -65,14 +63,11 @@ class CpSatPipelineSolver:
         hardware: PipelineHardware,
     ) -> PipelineSolution:
         try:
-            from ortools.sat.python import cp_model
+            cp_model = cast(Any, import_module("ortools.sat.python.cp_model"))
         except ImportError:
             return PipelineSolution(
                 status=SolveStatus.UNSUPPORTED,
-                diagnostics=(
-                    "OR-Tools is not installed; install "
-                    "tilefoundry-costmodel[cpsat]",
-                ),
+                diagnostics=("OR-Tools is not installed; install tilefoundry-costmodel[cpsat]",),
             )
 
         stages = {stage.name: stage for stage in problem.stages}
@@ -83,18 +78,15 @@ class CpSatPipelineSolver:
                 status=SolveStatus.OPTIMAL,
                 makespan_ns=0.0,
                 lower_bound_ns=0.0,
-                diagnostics=(
-                    f"solver=cp-sat resolution_ps={self.time_resolution_ps}",),
+                diagnostics=(f"solver=cp-sat resolution_ps={self.time_resolution_ps}",),
             )
 
         durations: Dict[str, float] = {}
         duration_ticks: Dict[str, int] = {}
         for stage in problem.stages:
-            duration = float(oracle.estimate(
-                stage, hardware=hardware).duration_ns)
+            duration = float(oracle.estimate(stage, hardware=hardware).duration_ns)
             if not math.isfinite(duration) or duration < 0:
-                return self._infeasible(
-                    f"stage {stage.name!r} has invalid duration {duration!r}")
+                return self._infeasible(f"stage {stage.name!r} has invalid duration {duration!r}")
             durations[stage.name] = duration
             duration_ticks[stage.name] = self._ticks(duration)
             for resource_demand in stage.resource_demands:
@@ -102,16 +94,17 @@ class CpSatPipelineSolver:
                 capacity = hardware.capacity(resource)
                 if capacity is None:
                     return self._infeasible(
-                        f"stage {stage.name!r} references unknown resource "
-                        f"{resource!r}")
+                        f"stage {stage.name!r} references unknown resource {resource!r}"
+                    )
                 if capacity <= 0:
                     return self._infeasible(
-                        f"resource {resource!r} has non-positive capacity "
-                        f"{capacity}")
+                        f"resource {resource!r} has non-positive capacity {capacity}"
+                    )
                 if resource_demand.demand > capacity:
                     return self._infeasible(
                         f"stage {stage.name!r} demand {resource_demand.demand} "
-                        f"exceeds resource {resource!r} capacity {capacity}")
+                        f"exceeds resource {resource!r} capacity {capacity}"
+                    )
 
         edges = []
         seen_edges = set()
@@ -120,13 +113,13 @@ class CpSatPipelineSolver:
         for edge in problem.precedences:
             if edge.src not in stages or edge.dst not in stages:
                 return self._infeasible(
-                    f"precedence {edge.src!r}->{edge.dst!r} references a "
-                    "missing stage")
+                    f"precedence {edge.src!r}->{edge.dst!r} references a missing stage"
+                )
             delay = float(edge.delay_ns)
             if not math.isfinite(delay) or delay < 0:
                 return self._infeasible(
-                    f"precedence {edge.src!r}->{edge.dst!r} has invalid "
-                    f"delay {delay!r}")
+                    f"precedence {edge.src!r}->{edge.dst!r} has invalid delay {delay!r}"
+                )
             key = (edge.src, edge.dst, delay)
             if key in seen_edges:
                 continue
@@ -137,8 +130,9 @@ class CpSatPipelineSolver:
         if not self._is_acyclic(successors, indegree):
             return self._infeasible("precedence graph contains a cycle")
 
-        horizon = max(1, sum(duration_ticks.values()) + sum(
-            delay_ticks for _, _, _, delay_ticks in edges))
+        horizon = max(
+            1, sum(duration_ticks.values()) + sum(delay_ticks for _, _, _, delay_ticks in edges)
+        )
         model = cp_model.CpModel()
         starts = {}
         ends = {}
@@ -147,8 +141,8 @@ class CpSatPipelineSolver:
             start = model.new_int_var(0, horizon, f"{stage.name}_start")
             end = model.new_int_var(0, horizon, f"{stage.name}_end")
             interval = model.new_interval_var(
-                start, duration_ticks[stage.name], end,
-                f"{stage.name}_interval")
+                start, duration_ticks[stage.name], end, f"{stage.name}_interval"
+            )
             starts[stage.name] = start
             ends[stage.name] = end
             intervals[stage.name] = interval
@@ -159,10 +153,13 @@ class CpSatPipelineSolver:
         by_resource = defaultdict(list)
         for stage in problem.stages:
             for resource_demand in stage.resource_demands:
-                by_resource[resource_demand.resource].append((
-                    intervals[stage.name], resource_demand.demand))
+                by_resource[resource_demand.resource].append(
+                    (intervals[stage.name], resource_demand.demand)
+                )
         for resource, reservations in by_resource.items():
             capacity = hardware.capacity(resource)
+            if capacity is None:
+                return self._infeasible(f"resource {resource!r} is not declared")
             resource_intervals = [interval for interval, _ in reservations]
             demands = [demand for _, demand in reservations]
             if capacity == 1 and all(demand == 1 for demand in demands):
@@ -195,25 +192,55 @@ class CpSatPipelineSolver:
                 diagnostics=("CP-SAT returned no feasible schedule",),
             )
 
-        placements = tuple(sorted((Placement(
-            stage=stage.name,
-            group=stage.group,
-            iteration=stage.iteration,
-            start_ns=self._ns(solver.value(starts[stage.name])),
-            end_ns=self._ns(solver.value(ends[stage.name])),
-            resources=stage.resources,
-            resource_demands=stage.resource_demands,
-        ) for stage in problem.stages), key=lambda item: (
-            item.start_ns, item.stage)))
+        solved_starts = {name: solver.value(starts[name]) for name in stages}
+        canonical_starts = dict(solved_starts)
+        predecessor_edges: Dict[str, List[Tuple[str, int]]] = defaultdict(list)
+        canonical_indegree = {name: 0 for name in stages}
+        canonical_successors: Dict[str, List[str]] = defaultdict(list)
+        for src, dst, _, delay_ticks in edges:
+            predecessor_edges[dst].append((src, delay_ticks))
+            canonical_successors[src].append(dst)
+            canonical_indegree[dst] += 1
+        ready = sorted(name for name, degree in canonical_indegree.items() if degree == 0)
+        while ready:
+            name = ready.pop(0)
+            if duration_ticks[name] == 0:
+                canonical_starts[name] = max(
+                    (
+                        canonical_starts[src] + duration_ticks[src] + delay
+                        for src, delay in predecessor_edges.get(name, ())
+                    ),
+                    default=0,
+                )
+            for successor in sorted(canonical_successors.get(name, ())):
+                canonical_indegree[successor] -= 1
+                if canonical_indegree[successor] == 0:
+                    ready.append(successor)
+                    ready.sort()
+
+        placements = tuple(
+            sorted(
+                (
+                    Placement(
+                        stage=stage.name,
+                        group=stage.group,
+                        iteration=stage.iteration,
+                        start_ns=self._ns(canonical_starts[stage.name]),
+                        end_ns=self._ns(canonical_starts[stage.name] + duration_ticks[stage.name]),
+                        resources=stage.resources,
+                        resource_demands=stage.resource_demands,
+                    )
+                    for stage in problem.stages
+                ),
+                key=lambda item: (item.start_ns, item.stage),
+            )
+        )
         placement_by_name = {placement.stage: placement for placement in placements}
-        critical_path = self._critical_path(
-            placement_by_name, edges, hardware)
+        critical_path = self._critical_path(placement_by_name, edges, hardware)
         per_group: Dict[str, float] = defaultdict(float)
         for stage in problem.stages:
             per_group[stage.group] += durations[stage.name]
-        result_status = (
-            SolveStatus.OPTIMAL
-            if status == cp_model.OPTIMAL else SolveStatus.FEASIBLE)
+        result_status = SolveStatus.OPTIMAL if status == cp_model.OPTIMAL else SolveStatus.FEASIBLE
         return PipelineSolution(
             status=result_status,
             makespan_ns=self._ns(solver.value(makespan)),
@@ -221,8 +248,7 @@ class CpSatPipelineSolver:
             placements=placements,
             per_group_ns=dict(per_group),
             critical_path=critical_path,
-            diagnostics=(
-                f"solver=cp-sat resolution_ps={self.time_resolution_ps}",),
+            diagnostics=(f"solver=cp-sat resolution_ps={self.time_resolution_ps}",),
         )
 
     @staticmethod
@@ -271,7 +297,8 @@ class CpSatPipelineSolver:
             seen.add(current)
             start = placements[current].start_ns
             candidates = [
-                (ready, name) for ready, name in predecessors.get(current, ())
+                (ready, name)
+                for ready, name in predecessors.get(current, ())
                 if abs(ready - start) <= 1e-6
             ]
             if not candidates:

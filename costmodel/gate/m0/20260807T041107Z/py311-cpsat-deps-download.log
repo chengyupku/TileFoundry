@@ -1,0 +1,34 @@
+Collecting absl-py>=2.0.0
+  Using cached absl_py-2.5.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting numpy>=2.0.2
+  Using cached numpy-2.4.6-cp311-cp311-macosx_11_0_arm64.whl.metadata (6.6 kB)
+Collecting pandas>=2.0.0
+  Using cached pandas-3.0.5-cp311-cp311-macosx_11_0_arm64.whl.metadata (79 kB)
+Collecting protobuf<6.34,>=6.33.1
+  Using cached protobuf-6.33.6-cp39-abi3-macosx_10_9_universal2.whl.metadata (593 bytes)
+Collecting typing-extensions>=4.12
+  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting immutabledict>=3.0.0
+  Using cached immutabledict-4.3.1-py3-none-any.whl.metadata (3.5 kB)
+Collecting python-dateutil>=2.8.2
+  Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting six>=1.5
+  Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Using cached protobuf-6.33.6-cp39-abi3-macosx_10_9_universal2.whl (427 kB)
+Using cached absl_py-2.5.0-py3-none-any.whl (137 kB)
+Using cached numpy-2.4.6-cp311-cp311-macosx_11_0_arm64.whl (15.0 MB)
+Downloading pandas-3.0.5-cp311-cp311-macosx_11_0_arm64.whl (10.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.0/10.0 MB 88.4 kB/s  0:01:13
+Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Using cached immutabledict-4.3.1-py3-none-any.whl (5.0 kB)
+Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+Saved /private/tmp/tilefoundry-m0-wheelhouse-py311-cpsat/protobuf-6.33.6-cp39-abi3-macosx_10_9_universal2.whl
+Saved /private/tmp/tilefoundry-m0-wheelhouse-py311-cpsat/absl_py-2.5.0-py3-none-any.whl
+Saved /private/tmp/tilefoundry-m0-wheelhouse-py311-cpsat/numpy-2.4.6-cp311-cp311-macosx_11_0_arm64.whl
+Saved /private/tmp/tilefoundry-m0-wheelhouse-py311-cpsat/pandas-3.0.5-cp311-cp311-macosx_11_0_arm64.whl
+Saved /private/tmp/tilefoundry-m0-wheelhouse-py311-cpsat/typing_extensions-4.16.0-py3-none-any.whl
+Saved /private/tmp/tilefoundry-m0-wheelhouse-py311-cpsat/immutabledict-4.3.1-py3-none-any.whl
+Saved /private/tmp/tilefoundry-m0-wheelhouse-py311-cpsat/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
+Saved /private/tmp/tilefoundry-m0-wheelhouse-py311-cpsat/six-1.17.0-py2.py3-none-any.whl
+Successfully downloaded protobuf absl-py numpy pandas typing-extensions immutabledict python-dateutil six

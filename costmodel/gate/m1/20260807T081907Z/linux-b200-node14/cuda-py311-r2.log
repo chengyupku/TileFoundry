@@ -1,0 +1,35 @@
+Python 3.11.15
+Processing ./workspace/TileFoundry/costmodel/gate/m1/20260807T081907Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl (from tilefoundry-costmodel==2.0.0)
+Collecting cuda-python<13,>=12.8 (from tilefoundry-costmodel==2.0.0->tilefoundry-costmodel==2.0.0)
+  Using cached cuda_python-12.9.7-py3-none-any.whl.metadata (4.7 kB)
+Collecting cuda-bindings~=12.9.7 (from cuda-python<13,>=12.8->tilefoundry-costmodel==2.0.0->tilefoundry-costmodel==2.0.0)
+  Using cached cuda_bindings-12.9.7-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (2.6 kB)
+Collecting cuda-pathfinder~=1.1 (from cuda-bindings~=12.9.7->cuda-python<13,>=12.8->tilefoundry-costmodel==2.0.0->tilefoundry-costmodel==2.0.0)
+  Using cached cuda_pathfinder-1.6.0-py3-none-any.whl.metadata (1.9 kB)
+Using cached cuda_python-12.9.7-py3-none-any.whl (7.6 kB)
+Using cached cuda_bindings-12.9.7-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (7.6 MB)
+Using cached cuda_pathfinder-1.6.0-py3-none-any.whl (54 kB)
+Installing collected packages: tilefoundry-costmodel, cuda-pathfinder, cuda-bindings, cuda-python
+Successfully installed cuda-bindings-12.9.7 cuda-pathfinder-1.6.0 cuda-python-12.9.7 tilefoundry-costmodel-2.0.0
+No broken requirements found.
+cuda-bindings==12.9.7
+cuda-pathfinder==1.6.0
+cuda-python==12.9.7
+pip==24.0
+setuptools==79.0.1
+tilefoundry-costmodel @ file:///home/yu.cheng/workspace/TileFoundry/costmodel/gate/m1/20260807T081907Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl#sha256=f295d99dd75c7b440289bbef6406094504b06384bc083a57caef6212a93d1b0b
+root=/tmp/tilefoundry-m1-node14-final-cuda-py311/lib/python3.11/site-packages/tilefoundry_costmodel/__init__.py
+preloaded_cuda_modules=['cuda']
+new_optional_or_legacy_modules=[]
+device_count=8
+device[0]=NVIDIA B200
+device[1]=NVIDIA B200
+device[2]=NVIDIA B200
+device[3]=NVIDIA B200
+device[4]=NVIDIA B200
+device[5]=NVIDIA B200
+device[6]=NVIDIA B200
+device[7]=NVIDIA B200
+cuda-python=12.9.7
+cuda-bindings=12.9.7
+cuda_driver_device_smoke=PASS

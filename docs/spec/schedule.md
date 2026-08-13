@@ -259,6 +259,11 @@ class PipelineSchedulePlan(SchedulePlan):
   - Plan construction MUST finish Target Facts projection before creating the
     closed problem. The problem and solve MUST hold no Target object or callback.
 
+The optional one-way projection into the standalone B200 cost model is specified
+in [cost-model §4.2](./cost-model.md#42-tilefoundry-adapter-boundary). The
+existing pipeline scheduler does not invoke that adapter, infer cost-model
+relations from schedule-tree order, or apply a cost-model result to this plan.
+
 ### 2.5 `PartitionSchedulePlan`
 
 A partition plan states where each value was placed, which operations run over

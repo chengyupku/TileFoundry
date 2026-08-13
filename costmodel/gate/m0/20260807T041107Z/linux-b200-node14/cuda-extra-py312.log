@@ -1,0 +1,43 @@
+== py312 interpreter ==
+Python 3.12.3 (main, Mar 23 2026, 19:04:32) [GCC 13.3.0]
+Using CPython 3.12.3 interpreter at: /usr/bin/python3.12
+Creating virtual environment with seed packages at: /tmp/tilefoundry-costmodel-m0-node14/py312-venv
+ + pip==26.2.1
+Activate with: source /tmp/tilefoundry-costmodel-m0-node14/py312-venv/bin/activate
+pip 26.2.1 from /tmp/tilefoundry-costmodel-m0-node14/py312-venv/lib/python3.12/site-packages/pip (python 3.12)
+== install exact wheel[cuda] ==
+Processing ./workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl (from tilefoundry-costmodel==2.0.0)
+Collecting cuda-python<13,>=12.8 (from tilefoundry-costmodel==2.0.0->tilefoundry-costmodel==2.0.0)
+  Using cached cuda_python-12.9.7-py3-none-any.whl.metadata (4.7 kB)
+Collecting cuda-bindings~=12.9.7 (from cuda-python<13,>=12.8->tilefoundry-costmodel==2.0.0->tilefoundry-costmodel==2.0.0)
+  Downloading cuda_bindings-12.9.7-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (2.6 kB)
+Collecting cuda-pathfinder~=1.1 (from cuda-bindings~=12.9.7->cuda-python<13,>=12.8->tilefoundry-costmodel==2.0.0->tilefoundry-costmodel==2.0.0)
+  Using cached cuda_pathfinder-1.6.0-py3-none-any.whl.metadata (1.9 kB)
+Using cached cuda_python-12.9.7-py3-none-any.whl (7.6 kB)
+Downloading cuda_bindings-12.9.7-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (7.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.6/7.6 MB 25.3 MB/s  0:00:00
+Using cached cuda_pathfinder-1.6.0-py3-none-any.whl (54 kB)
+Installing collected packages: tilefoundry-costmodel, cuda-pathfinder, cuda-bindings, cuda-python
+
+Successfully installed cuda-bindings-12.9.7 cuda-pathfinder-1.6.0 cuda-python-12.9.7 tilefoundry-costmodel-2.0.0
+== pip check/freeze ==
+No broken requirements found.
+== root lazy-import boundary ==
+preloaded by cuda-pathfinder: ['cuda']
+new optional modules loaded by package root: []
+root lazy import: OK
+2.0.0
+== CUDA driver/device visibility ==
+cuInit: <CUresult.CUDA_SUCCESS: 0>
+cuDeviceGetCount: <CUresult.CUDA_SUCCESS: 0> 8
+device[0]=NVIDIA B200
+device[1]=NVIDIA B200
+device[2]=NVIDIA B200
+device[3]=NVIDIA B200
+device[4]=NVIDIA B200
+device[5]=NVIDIA B200
+device[6]=NVIDIA B200
+device[7]=NVIDIA B200
+cuda-python: 12.9.7
+cuda-bindings: 12.9.7
+CUDA driver/device smoke: OK

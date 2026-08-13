@@ -1,0 +1,13 @@
+Processing ./costmodel
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: tilefoundry-costmodel
+  Building wheel for tilefoundry-costmodel (pyproject.toml): started
+  Building wheel for tilefoundry-costmodel (pyproject.toml): finished with status 'done'
+  Created wheel for tilefoundry-costmodel: filename=tilefoundry_costmodel-2.0.0-py3-none-any.whl size=79138 sha256=57058acb41622f7119da2389d96c9345df0523f5f355a83774a9559d9b2e949a
+  Stored in directory: /private/var/folders/wv/jwggyf5s49vgcs8yzkt567q40000gn/T/pip-ephem-wheel-cache-57fnka8d/wheels/9c/24/20/f464d9507156269bf955f0ebb0657da7d85fbaf63f4e98aab2
+Successfully built tilefoundry-costmodel

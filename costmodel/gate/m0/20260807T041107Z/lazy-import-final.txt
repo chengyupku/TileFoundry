@@ -1,0 +1,4 @@
+=== /tmp/tilefoundry-m0-final-py311-base/bin/python ===
+root import clean (2, 0)
+=== /tmp/tilefoundry-m0-final-py312-base/bin/python ===
+root import clean (2, 0)

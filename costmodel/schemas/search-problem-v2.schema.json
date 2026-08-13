@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilefoundry-costmodel/search-problem-v2",
+  "title": "TileFoundry cost-model search problem v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "hardware", "workload", "programs", "profile_snapshot", "solver_options", "configurations", "rejected_before_solve"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "request_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+    "hardware": {"$ref": "#/$defs/hardware"},
+    "workload": {"$ref": "#/$defs/workload"},
+    "programs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/program"}},
+    "profile_snapshot": {"$ref": "#/$defs/profileSnapshotRef"},
+    "solver_options": {"$ref": "#/$defs/solverOptions"},
+    "configurations": {"type": "array", "items": {"$ref": "#/$defs/configuration"}},
+    "rejected_before_solve": {"type": "array", "items": {"$ref": "#/$defs/rejectedCandidate"}}
+  },
+  "$defs": {
+    "profileSnapshotRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["snapshot_id", "revision"],
+      "properties": {"snapshot_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "revision": {"type": "integer", "minimum": 1}}
+    },
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["origin", "source", "conditions"],
+      "properties": {
+        "origin": {"enum": ["vendor", "measured", "derived", "conservative"]},
+        "source": {"type": "string", "minLength": 1},
+        "conditions": {"type": "string", "minLength": 1}
+      }
+    },
+    "temporalResource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resource_id", "capacity_slots", "description", "provenance"],
+      "properties": {
+        "resource_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "capacity_slots": {"type": "integer", "minimum": 1},
+        "description": {"type": "string", "minLength": 1},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      }
+    },
+    "staticResource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resource_id", "capacity_units", "unit", "description", "provenance"],
+      "properties": {
+        "resource_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "capacity_units": {"type": "integer", "minimum": 1},
+        "unit": {"enum": ["bytes", "registers_32bit", "warps", "slots"]},
+        "description": {"type": "string", "minLength": 1},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      }
+    },
+    "hardware": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "ref", "architecture", "temporal_resources", "static_resources", "supported_dtypes", "supported_implementation_ids"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "ref": {"$ref": "#/$defs/hardwareRef"},
+        "architecture": {"type": "string", "minLength": 1},
+        "temporal_resources": {"type": "array", "items": {"$ref": "#/$defs/temporalResource"}},
+        "static_resources": {"type": "array", "items": {"$ref": "#/$defs/staticResource"}},
+        "supported_dtypes": {"type": "array", "uniqueItems": true, "items": {"enum": ["bf16", "fp16", "fp32", "fp8_e4m3", "fp8_e5m2"]}},
+        "supported_implementation_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}
+      }
+    },
+    "hardwareRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["hardware_id", "schema_version", "calibration_id"],
+      "properties": {
+        "hardware_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "schema_version": {"const": 1},
+        "calibration_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}
+      }
+    },
+    "dtype": {"enum": ["bf16", "fp16", "fp32", "fp8_e4m3", "fp8_e5m2"]},
+    "layout": {"enum": ["row_major", "column_major"]},
+    "dimension": {"type": "integer", "minimum": 1},
+    "gemmWorkload": {"type": "object", "additionalProperties": false, "required": ["kind", "m", "n", "k", "dtype_a", "dtype_b", "dtype_accumulator", "dtype_output", "layout_a", "layout_b"], "properties": {"kind": {"const": "gemm"}, "m": {"$ref": "#/$defs/dimension"}, "n": {"$ref": "#/$defs/dimension"}, "k": {"$ref": "#/$defs/dimension"}, "dtype_a": {"$ref": "#/$defs/dtype"}, "dtype_b": {"$ref": "#/$defs/dtype"}, "dtype_accumulator": {"$ref": "#/$defs/dtype"}, "dtype_output": {"$ref": "#/$defs/dtype"}, "layout_a": {"$ref": "#/$defs/layout"}, "layout_b": {"$ref": "#/$defs/layout"}, "epilogue": {"enum": ["none", "bias", "relu", "gelu", "silu"]}}},
+    "gqaWorkload": {"type": "object", "additionalProperties": false, "required": ["kind", "batch_size", "query_heads", "kv_heads", "head_dim", "context_len", "dtype_query", "dtype_kv", "dtype_accumulator", "dtype_output"], "properties": {"kind": {"const": "gqa_decode"}, "batch_size": {"$ref": "#/$defs/dimension"}, "query_heads": {"$ref": "#/$defs/dimension"}, "kv_heads": {"$ref": "#/$defs/dimension"}, "head_dim": {"$ref": "#/$defs/dimension"}, "context_len": {"$ref": "#/$defs/dimension"}, "dtype_query": {"$ref": "#/$defs/dtype"}, "dtype_kv": {"$ref": "#/$defs/dtype"}, "dtype_accumulator": {"$ref": "#/$defs/dtype"}, "dtype_output": {"$ref": "#/$defs/dtype"}}},
+    "flashWorkload": {"type": "object", "additionalProperties": false, "required": ["kind", "batch_size", "heads", "query_len", "key_len", "head_dim", "dtype_query", "dtype_kv", "dtype_accumulator", "dtype_output", "causal"], "properties": {"kind": {"const": "flash_attention"}, "batch_size": {"$ref": "#/$defs/dimension"}, "heads": {"$ref": "#/$defs/dimension"}, "query_len": {"$ref": "#/$defs/dimension"}, "key_len": {"$ref": "#/$defs/dimension"}, "head_dim": {"$ref": "#/$defs/dimension"}, "dtype_query": {"$ref": "#/$defs/dtype"}, "dtype_kv": {"$ref": "#/$defs/dtype"}, "dtype_accumulator": {"$ref": "#/$defs/dtype"}, "dtype_output": {"$ref": "#/$defs/dtype"}, "causal": {"type": "boolean"}}},
+    "mlpWorkload": {"type": "object", "additionalProperties": false, "required": ["kind", "rows", "input_dim", "hidden_dim", "output_dim", "dtype_input", "dtype_weight", "dtype_accumulator", "dtype_output", "activation"], "properties": {"kind": {"const": "mlp"}, "rows": {"$ref": "#/$defs/dimension"}, "input_dim": {"$ref": "#/$defs/dimension"}, "hidden_dim": {"$ref": "#/$defs/dimension"}, "output_dim": {"$ref": "#/$defs/dimension"}, "dtype_input": {"$ref": "#/$defs/dtype"}, "dtype_weight": {"$ref": "#/$defs/dtype"}, "dtype_accumulator": {"$ref": "#/$defs/dtype"}, "dtype_output": {"$ref": "#/$defs/dtype"}, "activation": {"enum": ["relu", "gelu", "silu", "swiglu"]}}},
+    "workload": {"oneOf": [{"$ref": "#/$defs/gemmWorkload"}, {"$ref": "#/$defs/gqaWorkload"}, {"$ref": "#/$defs/flashWorkload"}, {"$ref": "#/$defs/mlpWorkload"}]},
+    "axis": {"type": "object", "additionalProperties": false, "required": ["name", "extent"], "properties": {"name": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "extent": {"type": "integer", "minimum": 1}}},
+    "shape": {"type": "object", "additionalProperties": false, "required": ["axes"], "properties": {"axes": {"type": "array", "items": {"$ref": "#/$defs/axis"}}}},
+    "tensor": {"type": "object", "additionalProperties": false, "required": ["shape", "dtype", "layout"], "properties": {"shape": {"$ref": "#/$defs/shape"}, "dtype": {"$ref": "#/$defs/dtype"}, "layout": {"$ref": "#/$defs/layout"}, "strides_elements": {"type": ["array", "null"], "items": {"type": "integer", "minimum": 0}}}},
+    "valueType": {"type": "object", "additionalProperties": false, "required": ["tensor", "memory_space"], "properties": {"tensor": {"$ref": "#/$defs/tensor"}, "memory_space": {"enum": ["global", "shared", "tensor", "register"]}}},
+    "programValue": {"type": "object", "additionalProperties": false, "required": ["value_id", "value_type"], "properties": {"value_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "value_type": {"$ref": "#/$defs/valueType"}}},
+    "programLoop": {"type": "object", "additionalProperties": false, "required": ["loop_id", "iterations"], "properties": {"loop_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "iterations": {"type": "integer", "minimum": 1}}},
+    "programDomain": {"type": "object", "additionalProperties": false, "required": ["loop_id", "first_iteration", "iteration_count"], "properties": {"loop_id": {"type": ["string", "null"], "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "first_iteration": {"type": "integer", "minimum": 0}, "iteration_count": {"type": "integer", "minimum": 1}}},
+    "copyOperation": {"type": "object", "additionalProperties": false, "required": ["kind", "op_id", "source", "destination", "domain"], "properties": {"kind": {"const": "copy"}, "op_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "source": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "destination": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "domain": {"$ref": "#/$defs/programDomain"}}},
+    "gemmOperation": {"type": "object", "additionalProperties": false, "required": ["kind", "op_id", "lhs", "rhs", "accumulator", "result", "m_axis", "n_axis", "k_axis", "domain"], "properties": {"kind": {"const": "gemm"}, "op_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "lhs": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "rhs": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "accumulator": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "result": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "m_axis": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "n_axis": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "k_axis": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "domain": {"$ref": "#/$defs/programDomain"}}},
+    "reduceOperation": {"type": "object", "additionalProperties": false, "required": ["kind", "op_id", "source", "result", "axes", "reduction", "domain"], "properties": {"kind": {"const": "reduce"}, "op_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "source": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "result": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "axes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}, "reduction": {"enum": ["sum", "max"]}, "domain": {"$ref": "#/$defs/programDomain"}}},
+    "elementwiseOperation": {"type": "object", "additionalProperties": false, "required": ["kind", "op_id", "inputs", "result", "function", "domain"], "properties": {"kind": {"const": "elementwise"}, "op_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}, "result": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "function": {"enum": ["add", "multiply", "divide", "exp", "relu", "gelu", "silu", "causal_mask"]}, "domain": {"$ref": "#/$defs/programDomain"}}},
+    "programOperation": {"oneOf": [{"$ref": "#/$defs/copyOperation"}, {"$ref": "#/$defs/gemmOperation"}, {"$ref": "#/$defs/reduceOperation"}, {"$ref": "#/$defs/elementwiseOperation"}]},
+    "alignedRelation": {"type": "object", "additionalProperties": false, "required": ["kind", "iteration_distance"], "properties": {"kind": {"const": "aligned"}, "iteration_distance": {"type": "integer", "minimum": 0}}},
+    "endpointRelation": {"type": "object", "additionalProperties": false, "required": ["kind", "src_endpoint", "dst_endpoint"], "properties": {"kind": {"const": "endpoint"}, "src_endpoint": {"enum": ["first", "last"]}, "dst_endpoint": {"enum": ["first", "last"]}}},
+    "programRelation": {"oneOf": [{"$ref": "#/$defs/alignedRelation"}, {"$ref": "#/$defs/endpointRelation"}]},
+    "programDependency": {"type": "object", "additionalProperties": false, "required": ["value_id", "src_op_id", "dst_op_id", "relation"], "properties": {"value_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "src_op_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "dst_op_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "relation": {"$ref": "#/$defs/programRelation"}}},
+    "programBarrier": {"type": "object", "additionalProperties": false, "required": ["barrier_id", "src_loop_id", "dst_loop_id"], "properties": {"barrier_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "src_loop_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "dst_loop_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}},
+    "program": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "program_id", "workload_kind", "tile", "values", "loops", "operations", "dependencies", "loop_barriers", "inputs", "outputs"],
+      "properties": {
+        "schema_version": {"const": 2},
+        "program_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "workload_kind": {"enum": ["gemm", "gqa_decode", "flash_attention", "mlp"]},
+        "tile": {"type": "object", "additionalProperties": false, "required": ["tile_id", "shape"], "properties": {"tile_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "shape": {"$ref": "#/$defs/shape"}}},
+        "values": {"type": "array", "items": {"$ref": "#/$defs/programValue"}},
+        "loops": {"type": "array", "items": {"$ref": "#/$defs/programLoop"}},
+        "operations": {"type": "array", "items": {"$ref": "#/$defs/programOperation"}},
+        "dependencies": {"type": "array", "items": {"$ref": "#/$defs/programDependency"}},
+        "loop_barriers": {"type": "array", "items": {"$ref": "#/$defs/programBarrier"}},
+        "inputs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}},
+        "outputs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}
+      }
+    },
+    "solverOptions": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "candidate_timeout_s": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "search_timeout_s": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "time_resolution_ps": {"type": "integer", "minimum": 1},
+        "ortools_workers": {"type": "integer", "minimum": 1},
+        "candidate_workers": {"type": "integer", "minimum": 1},
+        "random_seed": {"type": "integer"},
+        "finite_unroll_limit": {"type": "integer", "minimum": 1},
+        "stop_after_first_solution": {"type": "boolean"},
+        "deterministic": {"type": "boolean"}
+      },
+      "allOf": [{"if": {"properties": {"deterministic": {"const": true}}}, "then": {"properties": {"ortools_workers": {"const": 1}, "candidate_workers": {"const": 1}, "stop_after_first_solution": {"const": false}}}}]
+    },
+    "warpAssignment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "warp_ids"],
+      "properties": {"role": {"enum": ["tma_producer", "tensor_consumer", "cuda_epilogue"]}, "warp_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}}
+    },
+    "warpConfig": {
+      "type": "object", "additionalProperties": false,
+      "required": ["config_id", "total_warps", "roles"],
+      "properties": {
+        "config_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "total_warps": {"type": "integer", "minimum": 1},
+        "roles": {"type": "array", "items": {"$ref": "#/$defs/warpAssignment"}, "allOf": [{"contains": {"properties": {"role": {"const": "tma_producer"}}, "required": ["role"]}, "minContains": 0, "maxContains": 1}, {"contains": {"properties": {"role": {"const": "tensor_consumer"}}, "required": ["role"]}, "minContains": 0, "maxContains": 1}, {"contains": {"properties": {"role": {"const": "cuda_epilogue"}}, "required": ["role"]}, "minContains": 0, "maxContains": 1}]}
+      }
+    },
+    "tile": {"type": "object", "additionalProperties": false, "required": ["tile_id", "shape"], "properties": {"tile_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "shape": {"$ref": "#/$defs/shape"}}},
+    "phaseDomain": {
+      "type": "object", "additionalProperties": false,
+      "required": ["loop_id", "first_iteration", "iteration_count"],
+      "properties": {"loop_id": {"type": ["string", "null"], "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "first_iteration": {"type": "integer", "minimum": 0}, "iteration_count": {"type": "integer", "minimum": 1}}
+    },
+    "temporalDemand": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resource_id", "slots"],
+      "properties": {"resource_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "slots": {"type": "integer", "minimum": 1}}
+    },
+    "phase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["phase_id", "source_op_id", "implementation_id", "phase_name", "component_id", "domain", "duration_ticks", "sensitivity_duration_ticks", "warp_ids", "temporal_demands", "measurement_id", "profile_key_id", "environment_id", "timing_metric", "timing_statistic", "sensitivity_timing_statistic"],
+      "properties": {
+        "phase_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "source_op_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "implementation_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "phase_name": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "component_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "domain": {"$ref": "#/$defs/phaseDomain"}, "duration_ticks": {"type": "integer", "minimum": 1}, "sensitivity_duration_ticks": {"type": "integer", "minimum": 1},
+        "warp_ids": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}, "temporal_demands": {"type": "array", "items": {"$ref": "#/$defs/temporalDemand"}},
+        "measurement_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "profile_key_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "environment_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "timing_metric": {"enum": ["latency", "initiation_interval"]}, "timing_statistic": {"enum": ["p50", "p90"]}, "sensitivity_timing_statistic": {"enum": ["p50", "p90"]}
+      }
+    },
+    "relation": {"$ref": "#/$defs/programRelation"},
+    "dependency": {
+      "type": "object", "additionalProperties": false,
+      "required": ["src_phase_id", "dst_phase_id", "relation"],
+      "properties": {"src_phase_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "dst_phase_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "relation": {"$ref": "#/$defs/relation"}, "delay_ps": {"type": "integer", "minimum": 0}}
+    },
+    "alignment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["src_phase_id", "dst_phase_id"],
+      "properties": {"src_phase_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "dst_phase_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "offset_ps": {"type": "integer", "minimum": 0}}
+    },
+    "loop": {"type": "object", "additionalProperties": false, "required": ["loop_id", "iterations"], "properties": {"loop_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "iterations": {"type": "integer", "minimum": 1}}},
+    "implementation": {"type": "object", "additionalProperties": false, "required": ["op_id", "implementation_id"], "properties": {"op_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "implementation_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}},
+    "barrier": {"type": "object", "additionalProperties": false, "required": ["barrier_id", "src_loop_id", "dst_loop_id"], "properties": {"barrier_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "src_loop_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "dst_loop_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}},
+    "buffer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["buffer_id", "value_id", "storage_resource_id", "bytes_per_slot", "slot_count", "producer_phase_id", "release_phase_ids"],
+      "properties": {"buffer_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "value_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "storage_resource_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "bytes_per_slot": {"type": "integer", "minimum": 1}, "slot_count": {"type": "integer", "minimum": 1}, "producer_phase_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "release_phase_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}}
+    },
+    "staticDemand": {"type": "object", "additionalProperties": false, "required": ["resource_id", "units"], "properties": {"resource_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "units": {"type": "integer", "minimum": 1}}},
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["configuration_id", "program_id", "workload_kind", "tile", "implementations", "warps", "pipeline_depth", "layout_variant_id", "loops", "phases", "dependencies", "loop_barriers", "start_alignments", "buffers", "static_demands"],
+      "properties": {
+        "configuration_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "program_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "workload_kind": {"enum": ["gemm", "gqa_decode", "flash_attention", "mlp"]}, "tile": {"$ref": "#/$defs/tile"}, "implementations": {"type": "array", "items": {"$ref": "#/$defs/implementation"}}, "warps": {"$ref": "#/$defs/warpConfig"}, "pipeline_depth": {"type": "integer", "minimum": 1}, "layout_variant_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "loops": {"type": "array", "items": {"$ref": "#/$defs/loop"}}, "phases": {"type": "array", "items": {"$ref": "#/$defs/phase"}}, "dependencies": {"type": "array", "items": {"$ref": "#/$defs/dependency"}}, "loop_barriers": {"type": "array", "items": {"$ref": "#/$defs/barrier"}}, "start_alignments": {"type": "array", "items": {"$ref": "#/$defs/alignment"}}, "buffers": {"type": "array", "items": {"$ref": "#/$defs/buffer"}}, "static_demands": {"type": "array", "items": {"$ref": "#/$defs/staticDemand"}}
+      }
+    },
+    "rejectedCandidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {"configuration_id": {"type": ["string", "null"], "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}, "code": {"enum": ["invalid_candidate", "static_capacity", "missing_profile", "profile_failed", "unsupported", "infeasible", "timeout"]}, "message": {"type": "string", "minLength": 1}}
+    }
+  }
+}

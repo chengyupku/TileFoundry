@@ -1,0 +1,6 @@
+wheel_sha256=fbe0f7619b919ce2442b81051a36f84c9bc091d8d0f874475d53f94b21f4a84a
+base_dependencies=[]
+optional_requirements=6
+schemas=7 source_wheel_bytes=equal meta_validation=PASS
+calibration=source_wheel_bytes=equal schema_validation=PASS
+root_boundary=M0_bytes_equal

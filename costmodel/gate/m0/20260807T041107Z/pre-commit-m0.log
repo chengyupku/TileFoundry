@@ -1,0 +1,47 @@
+=== pre-commit version ===
+pre-commit 4.6.0
+=== selected files ===
+costmodel/src/tilefoundry_costmodel/__init__.py
+costmodel/src/tilefoundry_costmodel/__main__.py
+costmodel/src/tilefoundry_costmodel/_immutable.py
+costmodel/src/tilefoundry_costmodel/_serialization.py
+costmodel/src/tilefoundry_costmodel/api.py
+costmodel/src/tilefoundry_costmodel/cli.py
+costmodel/src/tilefoundry_costmodel/constants.py
+costmodel/src/tilefoundry_costmodel/errors.py
+costmodel/src/tilefoundry_costmodel/hardware/__init__.py
+costmodel/src/tilefoundry_costmodel/hardware/model.py
+costmodel/src/tilefoundry_costmodel/hardware/registry.py
+costmodel/src/tilefoundry_costmodel/implementations/__init__.py
+costmodel/src/tilefoundry_costmodel/language.py
+costmodel/src/tilefoundry_costmodel/legacy/__init__.py
+costmodel/src/tilefoundry_costmodel/legacy/cpsat_solver.py
+costmodel/src/tilefoundry_costmodel/legacy/list_solver.py
+costmodel/src/tilefoundry_costmodel/legacy/model.py
+costmodel/src/tilefoundry_costmodel/legacy/solver.py
+costmodel/src/tilefoundry_costmodel/model.py
+costmodel/src/tilefoundry_costmodel/profiles/__init__.py
+costmodel/src/tilefoundry_costmodel/profiles/model.py
+costmodel/src/tilefoundry_costmodel/profiles/schema.py
+costmodel/src/tilefoundry_costmodel/profiles/store.py
+costmodel/src/tilefoundry_costmodel/program.py
+costmodel/src/tilefoundry_costmodel/request.py
+costmodel/src/tilefoundry_costmodel/result.py
+costmodel/src/tilefoundry_costmodel/schema.py
+costmodel/src/tilefoundry_costmodel/search_space.py
+costmodel/src/tilefoundry_costmodel/solver/__init__.py
+costmodel/src/tilefoundry_costmodel/solver/model.py
+costmodel/src/tilefoundry_costmodel/workloads/__init__.py
+costmodel/tests/test_api.py
+costmodel/tests/test_solver.py
+docs/spec/cost-model.md
+docs/spec/schedule.md
+ruff.................................................(no files to check)Skipped
+clang-format.........................................(no files to check)Skipped
+spec-rules-lint..........................................................Passed
+spec-refs-lint...........................................................Passed
+spec-entropy-lint....................................(no files to check)Skipped
+forward-references...................................(no files to check)Skipped
+comment-hygiene......................................(no files to check)Skipped
+no-machine-paths.........................................................Passed
+english-only.............................................................Passed

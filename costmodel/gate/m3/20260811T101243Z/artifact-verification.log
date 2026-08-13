@@ -1,0 +1,7 @@
+wheel_sha256=75230665638482ce8cffadda9f392c10d48615733feef894dc5ec08e53a984a2
+package_source_members=49
+source_wheel_parity=PASS
+base_dependencies=[]
+optional_extras=cuda,test
+schemas=7 meta_validation=PASS
+calibration=schema_validation=PASS

@@ -1,0 +1,5 @@
+command=python3.12 -m pip wheel ./costmodel --no-deps --wheel-dir costmodel/gate/m1/20260807T092506Z/wheel
+python=3.12.13
+result=PASS
+wheel=costmodel/gate/m1/20260807T092506Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl
+sha256=fbe0f7619b919ce2442b81051a36f84c9bc091d8d0f874475d53f94b21f4a84a

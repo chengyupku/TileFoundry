@@ -1,0 +1,19 @@
+--------------------------------------------------------------------------------
+Name: b200-workspace-sync
+Identifier: sync_l5mpXhYtuZ80XXhECKvR0MYlRquj52gP4EqbJvjBWPv
+Alpha:
+	URL: /Users/mi/Desktop/b200_workspace/TileFoundry/costmodel
+	Connected: Yes
+	Synchronizable contents:
+		17 directories
+		73 files (757 kB)
+		0 symbolic links
+Beta:
+	URL: node14:~/workspace/TileFoundry/costmodel
+	Connected: Yes
+	Synchronizable contents:
+		17 directories
+		73 files (757 kB)
+		0 symbolic links
+Status: Watching for changes
+--------------------------------------------------------------------------------

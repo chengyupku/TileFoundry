@@ -1,0 +1,63 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/mi/Desktop/b200_workspace/TileFoundry/costmodel
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.14.2
+collected 65 items
+
+costmodel/tests/test_api.py .....................                        [ 32%]
+costmodel/tests/test_configuration_builder.py ....                       [ 38%]
+costmodel/tests/test_hardware.py ....                                    [ 44%]
+costmodel/tests/test_program.py ..........                               [ 60%]
+costmodel/tests/test_solver.py ............                              [ 78%]
+costmodel/tests/test_tileop.py ..............                            [100%]
+
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.12.13-final-0 _______________
+
+Name                                                               Stmts   Miss Branch BrPart  Cover
+----------------------------------------------------------------------------------------------------
+costmodel/src/tilefoundry_costmodel/__init__.py                       19      2      0      0    89%
+costmodel/src/tilefoundry_costmodel/__main__.py                        1      1      0      0     0%
+costmodel/src/tilefoundry_costmodel/_immutable.py                     52     14     22      6    68%
+costmodel/src/tilefoundry_costmodel/_serialization.py                615    197    162     34    65%
+costmodel/src/tilefoundry_costmodel/api.py                            34     19      4      0    39%
+costmodel/src/tilefoundry_costmodel/build.py                         344     73    168     47    76%
+costmodel/src/tilefoundry_costmodel/cli.py                            88     88     20      0     0%
+costmodel/src/tilefoundry_costmodel/constants.py                      10      0      0      0   100%
+costmodel/src/tilefoundry_costmodel/errors.py                         22      5      2      0    71%
+costmodel/src/tilefoundry_costmodel/hardware/__init__.py               6      0      0      0   100%
+costmodel/src/tilefoundry_costmodel/hardware/b200.py                  44      0      0      0   100%
+costmodel/src/tilefoundry_costmodel/hardware/model.py                194     42     76     27    74%
+costmodel/src/tilefoundry_costmodel/hardware/registry.py              35      5     12      3    83%
+costmodel/src/tilefoundry_costmodel/implementations/__init__.py        7      1      0      0    86%
+costmodel/src/tilefoundry_costmodel/implementations/base.py           37      7     14      5    76%
+costmodel/src/tilefoundry_costmodel/implementations/registry.py       82     16     38     12    77%
+costmodel/src/tilefoundry_costmodel/implementations/synthetic.py     161     17     52      9    88%
+costmodel/src/tilefoundry_costmodel/language.py                       24      2      0      0    92%
+costmodel/src/tilefoundry_costmodel/legacy/__init__.py                 6      0      0      0   100%
+costmodel/src/tilefoundry_costmodel/legacy/cpsat_solver.py           187     21     92     22    84%
+costmodel/src/tilefoundry_costmodel/legacy/list_solver.py            141      7     60     11    91%
+costmodel/src/tilefoundry_costmodel/legacy/model.py                   96      7     22      7    88%
+costmodel/src/tilefoundry_costmodel/legacy/solver.py                   2      2      0      0     0%
+costmodel/src/tilefoundry_costmodel/model.py                         233     60     50     14    67%
+costmodel/src/tilefoundry_costmodel/profiler/__init__.py               2      0      0      0   100%
+costmodel/src/tilefoundry_costmodel/profiler/base.py                 218     62     88     30    62%
+costmodel/src/tilefoundry_costmodel/profiles/__init__.py              21      7      0      0    67%
+costmodel/src/tilefoundry_costmodel/profiles/model.py                159     39     78     28    68%
+costmodel/src/tilefoundry_costmodel/profiles/schema.py                 3      3      0      0     0%
+costmodel/src/tilefoundry_costmodel/profiles/store.py                  2      2      0      0     0%
+costmodel/src/tilefoundry_costmodel/program.py                       589     73    240     60    83%
+costmodel/src/tilefoundry_costmodel/request.py                       230     46     96     30    75%
+costmodel/src/tilefoundry_costmodel/result.py                        338    137    112     10    48%
+costmodel/src/tilefoundry_costmodel/schema.py                          3      3      0      0     0%
+costmodel/src/tilefoundry_costmodel/search_space.py                    2      2      0      0     0%
+costmodel/src/tilefoundry_costmodel/solver/__init__.py                 2      0      0      0   100%
+costmodel/src/tilefoundry_costmodel/solver/model.py                  268     92     80     24    58%
+costmodel/src/tilefoundry_costmodel/tileop.py                        604     98    268     94    78%
+costmodel/src/tilefoundry_costmodel/workloads/__init__.py              2      0      0      0   100%
+costmodel/src/tilefoundry_costmodel/workloads/base.py                 50      7     14      4    83%
+costmodel/src/tilefoundry_costmodel/workloads/model.py                 2      2      0      0     0%
+----------------------------------------------------------------------------------------------------
+TOTAL                                                               4935   1159   1770    477    72%
+============================== 65 passed in 2.79s ==============================

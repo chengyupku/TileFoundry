@@ -1,0 +1,1 @@
+tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl#sha256=b16d10655364cd2ed81f6f56806c305893f98e5912ba8a7bffafd42b6023563a

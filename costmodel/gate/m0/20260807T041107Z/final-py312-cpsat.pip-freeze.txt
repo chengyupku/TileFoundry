@@ -1,0 +1,10 @@
+absl-py==2.5.0
+immutabledict==4.3.1
+numpy==2.5.1
+ortools==9.15.6755
+pandas==3.0.5
+protobuf==6.33.6
+python-dateutil==2.9.0.post0
+six==1.17.0
+tilefoundry-costmodel @ file:///Users/mi/Desktop/b200_workspace/TileFoundry/costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl#sha256=57058acb41622f7119da2389d96c9345df0523f5f355a83774a9559d9b2e949a
+typing_extensions==4.16.0

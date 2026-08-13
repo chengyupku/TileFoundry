@@ -1,0 +1,12 @@
+=== SHA256 ===
+57058acb41622f7119da2389d96c9345df0523f5f355a83774a9559d9b2e949a  costmodel/gate/m0/20260807T041107Z/wheel/tilefoundry_costmodel-2.0.0-py3-none-any.whl
+=== source/wheel schema equality ===
+hardware-v1.schema.json equal
+plan-v2.schema.json equal
+profile-snapshot-v1.schema.json equal
+program-v2.schema.json equal
+request-v2.schema.json equal
+result-v2.schema.json equal
+search-problem-v2.schema.json equal
+=== forbidden M1/M3 wheel paths ===
+none

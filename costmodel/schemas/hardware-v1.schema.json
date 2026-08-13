@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tilefoundry-costmodel/hardware-v1",
+  "title": "TileFoundry cost-model hardware v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ref", "architecture", "temporal_resources", "static_resources", "supported_dtypes", "supported_implementation_ids"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "ref": {"$ref": "#/$defs/hardwareRef"},
+    "architecture": {"type": "string", "minLength": 1},
+    "temporal_resources": {"type": "array", "items": {"$ref": "#/$defs/temporalResource"}},
+    "static_resources": {"type": "array", "items": {"$ref": "#/$defs/staticResource"}},
+    "supported_dtypes": {"type": "array", "uniqueItems": true, "items": {"enum": ["bf16", "fp16", "fp32", "fp8_e4m3", "fp8_e5m2"]}},
+    "supported_implementation_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}}
+  },
+  "$defs": {
+    "hardwareRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["hardware_id", "schema_version", "calibration_id"],
+      "properties": {
+        "hardware_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "schema_version": {"const": 1},
+        "calibration_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"}
+      }
+    },
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["origin", "source", "conditions"],
+      "properties": {
+        "origin": {"enum": ["vendor", "measured", "derived", "conservative"]},
+        "source": {"type": "string", "minLength": 1},
+        "conditions": {"type": "string", "minLength": 1}
+      }
+    },
+    "temporalResource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resource_id", "capacity_slots", "description", "provenance"],
+      "properties": {
+        "resource_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "capacity_slots": {"type": "integer", "minimum": 1},
+        "description": {"type": "string", "minLength": 1},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      }
+    },
+    "staticResource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resource_id", "capacity_units", "unit", "description", "provenance"],
+      "properties": {
+        "resource_id": {"type": "string", "minLength": 1, "pattern": "^[\\u0000-\\u007F]+$"},
+        "capacity_units": {"type": "integer", "minimum": 1},
+        "unit": {"enum": ["bytes", "registers_32bit", "warps", "slots"]},
+        "description": {"type": "string", "minLength": 1},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      }
+    }
+  }
+}

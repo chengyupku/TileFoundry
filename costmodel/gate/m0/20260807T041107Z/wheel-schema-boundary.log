@@ -1,0 +1,10 @@
+=== source/wheel schema equality ===
+hardware-v1.schema.json equal
+plan-v2.schema.json equal
+profile-snapshot-v1.schema.json equal
+program-v2.schema.json equal
+request-v2.schema.json equal
+result-v2.schema.json equal
+search-problem-v2.schema.json equal
+=== forbidden M1/M3 wheel paths ===
+none
