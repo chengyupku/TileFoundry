@@ -13,10 +13,14 @@ overwritten), so the statement name and coordinates are read from the call
 expression natively; and ``isl.printer`` writes only to a file and buffers
 until ``flush``, so ``_print_to_str`` goes through a temporary one.
 """
+
 from __future__ import annotations
 
 import itertools
 import math
+import os
+import pathlib
+import tempfile
 from dataclasses import dataclass
 
 import isl
@@ -237,8 +241,14 @@ def _render_hole_call(
 
 def _print_to_str(node: "isl.ast_node", options: "isl.ast_print_options") -> str:
     """``node`` printed as C through ``options``."""
-    printer = isl.printer.to_str().set_output_format(isl.format.C)
-    return node.print(printer, options).get_str()
+    handle, path = tempfile.mkstemp(suffix=".c")
+    os.close(handle)
+    try:
+        printer = isl.printer.to_file_path(path).set_output_format(isl.format.C)
+        node.print(printer, options).flush()
+        return pathlib.Path(path).read_text(encoding="utf-8")
+    finally:
+        os.unlink(path)
 
 
 def _build_skeleton(
