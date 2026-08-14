@@ -705,15 +705,20 @@ For each explicit resource window, every shifted interval
  start_offset(op) + window.start_offset + window.duration + i * II)
 ```
 
-must satisfy the declared capacity at every time across all integer `i`. The
-periodic capacity check must include windows crossing the period boundary; a
-single representative period is valid only after its boundary overlaps with
-the preceding and following periods have been checked.
+must satisfy the declared capacity at every time across all integer `i`. M6.2
+checks the finite prologue and requested body prefix with derived resource
+interval auxiliaries, so a resourceful finite model may grow with the requested
+prefix. The periodic capacity check must include windows crossing the period
+boundary; a single representative period is valid only after its boundary
+overlaps with the preceding and following periods have been checked.
 
 For a fixed finite `iterations = N`, the objective cannot be only `min II`.
 The result must minimize the maximum completion over `0 <= i < N`, including
-start offsets and finite prologue/epilogue work. A smaller steady-state II can
-have a worse finite makespan when its phase or boundary work is later.
+start offsets and finite boundary work. M6.2 currently omits the final
+successor requirement but does not yet search a separately peeled epilogue;
+that choice and its finite-makespan effect are a M6.3 obligation. A smaller
+steady-state II can have a worse finite makespan when its phase or boundary
+work is later.
 
 #### Boundary And Output Decision
 
@@ -722,7 +727,7 @@ Three representations were considered:
 | Representation | Decision |
 | --- | --- |
 | One steady-state template for all iterations | Rejected: it cannot express external iteration-zero init, `i >= 1` carried overwrite, or the final iteration without a successor. |
-| Finite prologue + periodic body + finite epilogue | Chosen mathematical model: boundary instances are finite, while the repeated middle uses `II` and offsets. |
+| Finite prologue + periodic body + finite epilogue | Chosen eventual mathematical model: boundary instances are finite, while the repeated middle uses `II` and offsets. M6.2 currently implements the prologue plus a finite prefix whose final successor is omitted; M6.3 must decide and validate a peeled epilogue. |
 | A new periodic JSON/schema result | Rejected for M6: periodic data is materialized on demand into existing `WarpgroupSchedule` v3. |
 
 The conceptual periodic certificate has only values that are not derivable
@@ -775,35 +780,46 @@ produce ordinary v3 rows accepted by the independent verifier.
   initiation interval and operation start offsets. Apply one static lane-local
   order across all finite iterations, retain completion-based SSA/sync/lifetime
   constraints, and verify the derived interval without adding schedule fields.
-- [x] step 6.2 Implement the compact finite prologue, periodic body, and finite
-  epilogue boundary contract without adding a serialized periodic result type.
+- [x] step 6.2 Implement the compact finite prologue and periodic-body finite
+  prefix contract without adding a serialized periodic result type. The final
+  row is a body row with its successor requirement omitted; it is not yet an
+  independently searched peeled epilogue.
   The v3 CP-SAT model has one `II`, one body start offset and one finite
   prologue start per static operation, and one cyclic order per fixed warp
   group; later body rows are materialized without per-iteration operation
   timing decisions. Iteration zero uses the external loop init, carried shared
   overwrite applies from iteration one, and the final iteration has no
   successor requirement. Explicit resource windows participate in finite
-  capacity constraints; an infinite period-boundary resource proof remains in
-  step 6.4.
+  capacity constraints through finite derived interval auxiliaries; the
+  resourceful model therefore still grows with the requested prefix. An
+  infinite period-boundary resource proof remains in step 6.4.
 - [ ] step 6.3 Define the finite makespan objective and deterministic tie-breaks;
-  prove why minimizing `II` alone is insufficient for fixed finite `N`.
-- [ ] step 6.4 Define periodic lane/resource boundary checks, including windows
-  crossing the period boundary and completion sync that cannot be inferred from
-  issue order.
+  decide between an independently searched peeled epilogue and the current
+  omitted-final-successor prefix, then prove the selected model against the
+  finite solver's optimal makespan. Prove why minimizing `II` alone is
+  insufficient for fixed finite `N`.
+- [ ] step 6.4 Define periodic lane/resource boundary checks, including a
+  compact treatment of resource windows that avoids per-prefix auxiliary
+  growth, windows crossing the period boundary, and completion sync that cannot
+  be inferred from issue order.
 - [ ] step 6.5 Define materialization of any finite prefix into existing
   `WarpgroupSchedule` v3 and independent verifier checks.
 
 #### Acceptance Criteria
 - [ ] AC-6-1: Periodic result size is independent of the requested iteration
-count; only on-demand v3 materialization grows with finite `N`.
+count; only on-demand v3 materialization grows with finite `N`. This remains
+unproven for resourceful finite problems while M6.2 uses per-prefix derived
+resource intervals.
 - [ ] AC-6-2: Any materialized prefix is accepted or rejected by the existing
   independent verifier with no periodic-specific verifier path.
 - [ ] AC-6-3: Known small closed problems match the finite solver's optimal
-  makespan after materialization, including boundary work.
+makespan after materialization, including the eventual peeled-epilogue or
+omitted-successor boundary decision.
 - [ ] AC-6-4: Required completion synchronization, including same-lane async
   dependencies and carried-shared finite overwrite edges, is never dropped.
 - [ ] AC-6-5: Infinite lane issue intervals and resource windows remain legal at
-  every period boundary.
+  every period boundary, including a compact resource-window treatment rather
+  than finite-prefix auxiliary expansion.
 - [ ] AC-6-6: Repeated deterministic inputs produce identical periodic values
 and identical materialized v3 schedules.
 - [ ] AC-6-7: The design and eventual implementation load no TileProf, CUDA,

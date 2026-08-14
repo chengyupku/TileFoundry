@@ -987,16 +987,21 @@ the maximum of every prologue completion and
 body; it is not a standalone minimization of `II`. Every declared resource
 window in the finite prologue and requested body prefix participates in the
 solver's capacity constraints, and the independent verifier checks the same
-finite windows. This does not claim an infinite periodic resource-capacity
-proof: windows crossing an unbounded period boundary remain deferred to later
-periodic resource-boundary work.
+finite windows. These finite resource constraints use derived interval
+auxiliaries for each requested window instance, so resourceful CP model size is
+not currently claimed to be independent of the prefix length. This does not
+claim an infinite periodic resource-capacity proof: windows crossing an
+unbounded period boundary remain deferred to later periodic resource-boundary
+work.
 
 When a v3 prefix contains at least two body instances, the verifier derives
 `II` from iterations one and two and requires the same positive start delta for
 all later body pairs. The prologue-to-body delta is intentionally exempt. With
 only one body instance, `II` is not recoverable from the serialized finite
 schedule; lane, dependency, shared-lifetime, synchronization, resource, and
-finite timing checks still apply.
+finite timing checks still apply. The final row currently remains a periodic
+body row with its successor requirement omitted; an independently searched
+peeled epilogue is not part of this boundary.
 
 The schedule decoder and model reject malformed IDs, repeated operations across
 lanes, duplicate synchronization edges or timed instances, distance-zero self
