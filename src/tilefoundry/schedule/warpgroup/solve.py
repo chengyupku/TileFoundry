@@ -239,6 +239,19 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
                 intervals_by_resource[window.resource_id].append(interval)
                 demands_by_resource[window.resource_id].append(window.amount)
 
+    if fixed_ownership:
+        initiation_interval = model.NewIntVar(1, horizon, "II")
+        if problem.loop.iterations >= 2:
+            start_offsets = {
+                operation_id: starts[(0, operation_id)] for operation_id in operation_ids
+            }
+            for operation_id in operation_ids:
+                for iteration in range(problem.loop.iterations - 1):
+                    model.Add(
+                        starts[(iteration + 1, operation_id)]
+                        == start_offsets[operation_id] + (iteration + 1) * initiation_interval
+                    )
+
     # Each operation occupies its selected lane once per iteration.  This also
     # orders a lane containing only one loop-body operation across iterations.
     for operation_id in operation_ids:

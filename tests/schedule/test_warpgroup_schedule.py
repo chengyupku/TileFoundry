@@ -1317,6 +1317,88 @@ def test_m6_new_schema_and_decoder_reject_invalid_expression_arity(
             decoder(json.dumps(document))
 
 
+def _periodic_problem() -> WarpgroupProblem:
+    value_type = TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER)
+    return WarpgroupProblem(
+        PROBLEM_FORMAT_V3,
+        "cycle",
+        2,
+        (),
+        (value_type,),
+        (),
+        ProblemLoop(
+            "%iteration",
+            3,
+            (),
+            (
+                ProblemOperation(
+                    "a",
+                    (OperationOutput("%a", "value", ScalarLiteral(1.0)),),
+                    2,
+                    (),
+                    warp_group=0,
+                ),
+                ProblemOperation(
+                    "b",
+                    (OperationOutput("%b", "value", ScalarLiteral(1.0)),),
+                    1,
+                    (),
+                    warp_group=0,
+                ),
+                ProblemOperation(
+                    "c",
+                    (OperationOutput("%c", "value", ScalarLiteral(1.0)),),
+                    1,
+                    (),
+                    warp_group=1,
+                ),
+            ),
+        ),
+    )
+
+
+def test_m6_1_fixed_owner_periodic_finite_solve_is_deterministic() -> None:
+    problem = _periodic_problem()
+    first = solve_warpgroup_problem(problem)
+    second = solve_warpgroup_problem(problem)
+    assert first == second
+    schedule = export_warpgroup_schedule(problem, first)
+    verify_warpgroup_schedule(problem, schedule)
+    times = _time_map(first)
+    initiation_intervals = {
+        times[(iteration + 1, operation_id)].start - times[(iteration, operation_id)].start
+        for operation_id in ("a", "b", "c")
+        for iteration in range(2)
+    }
+    assert initiation_intervals == {3}
+    assert first.makespan == 9
+    assert set(first.lanes[0].operations) == {"a", "b"}
+    assert first.lanes[1].operations == ("c",)
+    assert warpgroup_schedule_to_json(schedule) == warpgroup_schedule_to_json(
+        export_warpgroup_schedule(problem, second)
+    )
+
+
+def test_m6_1_verifier_rejects_one_iteration_period_shift() -> None:
+    problem = _periodic_problem()
+    schedule = export_warpgroup_schedule(problem, solve_warpgroup_problem(problem))
+    shifted_times = tuple(
+        TimedOperation(
+            item.iteration,
+            item.operation_id,
+            item.start + 1,
+            issue_end=item.issue_end + 1,
+            completion=item.completion + 1,
+        )
+        if (item.iteration, item.operation_id) == (1, "c")
+        else item
+        for item in schedule.times
+    )
+    shifted = WarpgroupSchedule(SCHEDULE_FORMAT_V3, schedule.lanes, schedule.sync, shifted_times)
+    with pytest.raises(WarpgroupVerificationError, match="periodic initiation interval"):
+        verify_warpgroup_schedule(problem, shifted)
+
+
 def _async_program() -> WarpgroupProgram:
     types = (
         TensorType("source", (2, 1), DType.FP32, MemorySpace.GLOBAL),

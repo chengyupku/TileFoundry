@@ -950,6 +950,14 @@ all finite operation instances. Consequently, independent asynchronous
 operations may issue consecutively on one lane while their completion ranges
 overlap.
 
+For problem v3 with at least two finite iterations, the solver additionally
+creates one positive integer initiation interval `II` and one shared baseline
+`start_offset(op) = start(0, op)` for every static operation. It constrains
+`start(i + 1, op) = start(i, op) + II` for every adjacent iteration. Thus the
+finite witness is one periodic timing template; `II` is derived from `times`
+and is not serialized in the schedule. This finite rule does not claim an
+infinite-period resource-boundary proof, which remains deferred.
+
 The schedule decoder and model reject malformed IDs, repeated operations across
 lanes, duplicate synchronization edges or timed instances, distance-zero self
 edges, and non-positive intervals. Constraints that require the closed problem,

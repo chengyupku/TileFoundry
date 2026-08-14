@@ -763,9 +763,10 @@ rows that the existing independent verifier can check.
   schedule v3. Propagate `warp_group` exactly, remove placement variables from
   the v3 solver path, preserve empty groups, and keep legacy anonymous formats
   unchanged.
-- [ ] step 6.1 Freeze the v3-only periodic input and the exact finite expansion
-  rules for SSA, sync distance, shared lifetime, lane issue order, and resource
-  windows.
+- [x] step 6.1 Implement finite v3 periodic consistency with one shared positive
+  initiation interval and operation start offsets. Apply one static lane-local
+  order across all finite iterations, retain completion-based SSA/sync/lifetime
+  constraints, and verify the derived interval without adding schedule fields.
 - [ ] step 6.2 Specify the finite prologue, periodic body, and finite epilogue
   boundary contract without adding a serialized periodic result type.
 - [ ] step 6.3 Define the finite makespan objective and deterministic tie-breaks;
