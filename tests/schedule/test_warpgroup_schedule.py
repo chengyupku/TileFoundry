@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import importlib
 import json
 import subprocess
 import sys
@@ -1399,6 +1400,155 @@ def test_m6_1_verifier_rejects_one_iteration_period_shift() -> None:
         verify_warpgroup_schedule(problem, shifted)
 
 
+def test_m6_2_compact_model_variable_count_is_iteration_independent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cp_model = importlib.import_module("ortools.sat.python.cp_model")
+    original_model = cp_model.CpModel
+    counts: list[int] = []
+
+    class CountingModel:
+        def __init__(self) -> None:
+            self.inner = original_model()
+
+        def NewIntVar(self, *args: object, **kwargs: object) -> object:
+            counts[-1] += 1
+            return self.inner.NewIntVar(*args, **kwargs)
+
+        def NewBoolVar(self, *args: object, **kwargs: object) -> object:
+            counts[-1] += 1
+            return self.inner.NewBoolVar(*args, **kwargs)
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self.inner, name)
+
+    monkeypatch.setattr(cp_model, "CpModel", CountingModel)
+    for iterations in (2, 30):
+        counts.append(0)
+        problem = _periodic_problem()
+        problem = dataclasses.replace(
+            problem,
+            loop=dataclasses.replace(problem.loop, iterations=iterations),
+        )
+        solve_warpgroup_problem(problem)
+    assert counts[0] == counts[1]
+
+
+def test_m6_2_compact_two_round_dependency_matches_materialized_witness() -> None:
+    """A carried SSA edge is solved once and then expanded into two rows."""
+    program = _fixed_owner_program()
+    problem = build_warpgroup_problem(program, _library(program))
+    result = solve_warpgroup_problem(problem)
+    schedule = export_warpgroup_schedule(problem, result)
+    verify_warpgroup_schedule(problem, schedule)
+
+    assert problem.dependencies() == (
+        DefUseDependency("advance", "advance", 1),
+        DefUseDependency("load", "advance", 0),
+    )
+    times = _time_map(result)
+    assert {
+        times[(1, operation_id)].start - times[(0, operation_id)].start
+        for operation_id in ("load", "advance", "independent")
+    } == {5}
+    assert result.makespan == 10
+    assert result.lanes[0].operations == ("load", "advance")
+    assert result.lanes[1].operations == ("independent",)
+    assert result.lanes[2].operations == ()
+
+
+def test_m6_2_fixed_owner_resource_windows_are_solved_before_export() -> None:
+    value_type = TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER)
+    problem = WarpgroupProblem(
+        PROBLEM_FORMAT_V3,
+        "cycle",
+        2,
+        (ResourceCapacity("engine", 1),),
+        (value_type,),
+        (),
+        ProblemLoop(
+            "%iteration",
+            2,
+            (),
+            tuple(
+                ProblemOperation(
+                    operation_id,
+                    (OperationOutput(f"%{operation_id}", "value", ScalarLiteral(1.0)),),
+                    issue_duration=1,
+                    completion_latency=5,
+                    resource_windows=(ResourceWindow("engine", 1, 0, 5),),
+                    warp_group=warp_group,
+                )
+                for operation_id, warp_group in (("first", 0), ("second", 1))
+            ),
+        ),
+    )
+
+    result = schedule_warpgroups(problem)
+    verify_warpgroup_schedule(problem, result.schedule)
+    windows = sorted((item.start, item.start + 5) for item in result.schedule.times)
+    assert all(left[1] <= right[0] for left, right in zip(windows, windows[1:]))
+    assert result.makespan == 20
+
+
+def test_m6_2_external_shared_init_has_an_independent_prologue() -> None:
+    types = (
+        TensorType("source", (2, 1), DType.FP32, MemorySpace.GLOBAL),
+        TensorType("shared", (1,), DType.FP32, MemorySpace.SHARED),
+        TensorType("result", (1,), DType.FP32, MemorySpace.REGISTER),
+    )
+    problem = WarpgroupProblem(
+        PROBLEM_FORMAT_V3,
+        "cycle",
+        2,
+        (),
+        types,
+        (ProgramInput("%source", "source"), ProgramInput("%initial", "shared")),
+        ProblemLoop(
+            "%iteration",
+            2,
+            (LoopIterArg("%carry", ValueRef("%initial"), ValueRef("%shared")),),
+            (
+                ProblemOperation(
+                    "publish",
+                    (
+                        OperationOutput(
+                            "%shared",
+                            "shared",
+                            CopyExpression(
+                                IndexExpression(ValueRef("%source"), (LoopIndexRef("%iteration"),))
+                            ),
+                        ),
+                    ),
+                    1,
+                    (),
+                    warp_group=0,
+                ),
+                ProblemOperation(
+                    "consume",
+                    (OperationOutput("%result", "result", CopyExpression(ValueRef("%carry"))),),
+                    4,
+                    (),
+                    warp_group=1,
+                ),
+            ),
+        ),
+    )
+
+    result = schedule_warpgroups(problem)
+    times = {(item.iteration, item.operation_id): item for item in result.schedule.times}
+    consume_zero = times[(0, "consume")]
+    publish_zero = times[(0, "publish")]
+    assert max(consume_zero.start, publish_zero.start) < min(
+        consume_zero.completion, publish_zero.completion
+    )
+    assert publish_zero.completion <= times[(1, "consume")].start
+    assert times[(1, "consume")].completion <= times[(1, "publish")].start
+    assert result.makespan == 9
+    assert SynchronizationEdge("publish", "consume", 1) in result.schedule.sync
+    verify_warpgroup_schedule(problem, result.schedule)
+
+
 def _async_program() -> WarpgroupProgram:
     types = (
         TensorType("source", (2, 1), DType.FP32, MemorySpace.GLOBAL),
@@ -1606,8 +1756,9 @@ def test_lsy_reference_documents_and_complete_workflow_are_one_smoke_test() -> N
     program = warpgroup_program_from_json(_document("lsy-schedule-input.json"))
     reference_problem = warpgroup_problem_from_json(_document("warpgroup-closed-problem.json"))
     reference_schedule = warpgroup_schedule_from_json(_document("lsy-schedule-output.json"))
-    problem = build_warpgroup_problem(program, _library(program))
-    result = schedule_warpgroups(program, _library(program))
+    library = _library(program)
+    problem = build_warpgroup_problem(program, library)
+    result = schedule_warpgroups(program, library)
     schedule = result.schedule
     reference_signatures = tuple(
         sorted(

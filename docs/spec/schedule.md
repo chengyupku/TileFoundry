@@ -849,6 +849,15 @@ lane-local order and timing inside each declared group, and a v3 schedule keeps
 lane index `i` equal to input group `i`, including empty groups. Legacy versions
 retain anonymous placement search and do not accept an ownership field.
 
+The fixed-owner v3 finite solver uses a compact periodic body with finite
+boundaries. Its CP-SAT decision values are one positive initiation interval
+`II`, one body `start_offset(op)` and one prologue start per static operation,
+and one cyclic lane-local order for each fixed warp group. It does not create a
+separate operation timing decision for every periodic body iteration. The
+requested finite prefix is materialized after solving using the derived
+formulae in [§6.5](#65-warpgroupschedule), preserving the existing v3 JSON
+boundary.
+
 Each resource window has exactly `resource_id`, positive integer `amount`,
 non-negative integer `start_offset`, and positive integer `duration`. It owns
 the half-open interval
@@ -950,13 +959,44 @@ all finite operation instances. Consequently, independent asynchronous
 operations may issue consecutively on one lane while their completion ranges
 overlap.
 
-For problem v3 with at least two finite iterations, the solver additionally
-creates one positive integer initiation interval `II` and one shared baseline
-`start_offset(op) = start(0, op)` for every static operation. It constrains
-`start(i + 1, op) = start(i, op) + II` for every adjacent iteration. Thus the
-finite witness is one periodic timing template; `II` is derived from `times`
-and is not serialized in the schedule. This finite rule does not claim an
-infinite-period resource-boundary proof, which remains deferred.
+For problem v3, iteration zero is a finite prologue with one independently
+searched start per operation. It consumes the external loop init and is not
+forced to have the body's relative timing. Materialized iterations `i >= 1`
+use the compact periodic body:
+
+```text
+start(i, op) = start_offset(op) + i * II
+```
+
+`issue_end` and `completion` are derived from the selected start and the
+operation's issue duration and completion latency. Dependencies originating in
+the prologue are constrained directly against their finite destination.
+Dependencies between body iterations use offset relations; for example, a
+distance-one relation uses `completion_offset(after) <= start_offset(before) +
+II` only when that body successor exists in the requested prefix. A carried
+shared overwrite applies to iterations `i >= 1`, while the prologue's external
+init user is free to overlap that iteration's body definition. The final
+iteration has no successor-use requirement. No conditional sync record or new
+serialized boundary field is introduced.
+
+For each lane, the selected cyclic order enforces both adjacent issue windows
+within a period and the last-to-first wrap inequality
+`issue_end_offset(last) <= start_offset(first) + II`. The finite objective is
+the maximum of every prologue completion and
+`start_offset(op) + (N - 1) * II + completion_latency(op)` for a non-empty
+body; it is not a standalone minimization of `II`. Every declared resource
+window in the finite prologue and requested body prefix participates in the
+solver's capacity constraints, and the independent verifier checks the same
+finite windows. This does not claim an infinite periodic resource-capacity
+proof: windows crossing an unbounded period boundary remain deferred to later
+periodic resource-boundary work.
+
+When a v3 prefix contains at least two body instances, the verifier derives
+`II` from iterations one and two and requires the same positive start delta for
+all later body pairs. The prologue-to-body delta is intentionally exempt. With
+only one body instance, `II` is not recoverable from the serialized finite
+schedule; lane, dependency, shared-lifetime, synchronization, resource, and
+finite timing checks still apply.
 
 The schedule decoder and model reject malformed IDs, repeated operations across
 lanes, duplicate synchronization edges or timed instances, distance-zero self

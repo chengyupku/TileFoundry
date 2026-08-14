@@ -668,8 +668,9 @@ solver variable and output lane index is the declared group index.
 #### Mathematical Contract
 
 For every loop-body operation `op` and every integer iteration `i >= 0`, there
-is exactly one instance. A steady-state body has one positive integer initiation
-interval `II` and one integer `start_offset(op)` such that:
+is exactly one instance. Iteration zero is a finite prologue with an independent
+`prologue_start(op)`. The periodic body has one positive integer initiation
+interval `II` and one integer `start_offset(op)` such that, for `i >= 1`:
 
 ```text
 start(i, op) = start_offset(op) + i * II
@@ -725,16 +726,16 @@ Three representations were considered:
 | A new periodic JSON/schema result | Rejected for M6: periodic data is materialized on demand into existing `WarpgroupSchedule` v3. |
 
 The conceptual periodic certificate has only values that are not derivable
-from the closed problem: existing lane body order, `II`, and per-operation
-`start_offset`. Boundary rows and completion sync are also required when
-materializing a finite result because they are not derivable from a body
-template alone. These are design quantities, not new public fields or Python
-records. The public output remains the existing v3 fields
-`format`, `lanes`, `sync`, and `times` after materialization.
+from the closed problem: existing lane body order, `II`, per-operation body
+`start_offset`, and finite prologue starts. Boundary rows and completion sync
+are also required when materializing a finite result because they are not
+derivable from a body template alone. These are design quantities, not new
+public fields or Python records. The public output remains the existing v3
+fields `format`, `lanes`, `sync`, and `times` after materialization.
 
 #### Generic Example
 
-Consider two lanes and a two-iteration body:
+Consider two lanes and a three-iteration finite prefix:
 
 ```text
 lane 0: produce   issue=1, completion=4, writes shared `%next`
@@ -742,21 +743,28 @@ lane 1: consume   issue=1, completion=1, reads carried shared `%carry`
 ```
 
 `%carry` is externally initialized for iteration zero and yields `%next`.
-Choose `II = 3`, `start_offset(produce) = 0`, and
-`start_offset(consume) = 1`:
+The prologue may issue both operations at time zero because `%carry` is the
+external init:
 
 ```text
-produce(i): start=0+3i, issue_end=1+3i, completion=4+3i
-consume(i): start=1+3i, issue_end=2+3i, completion=2+3i
+produce(0): start=0, issue_end=1, completion=4
+consume(0): start=0, issue_end=1, completion=1
 ```
 
-`produce(i) -> consume(i+1)` is ready at `4+3i <= 1+3(i+1)` only when the
-chosen offsets and `II` satisfy the relation; `consume(i)` completes before
-the next `produce(i+1)` overwrite at `2+3i <= 3+3i`. The producer and consumer
-issue in adjacent lanes while completion and reuse overlap across iterations.
-Iteration zero consumes the external init, and the final iteration has no
-required next consumer. Expanding a finite prefix must produce ordinary v3
-rows that the existing independent verifier can check.
+Choose `II = 5`, `start_offset(consume) = 0`, and
+`start_offset(produce) = 1` for body iterations `i >= 1`:
+
+```text
+consume(i): start=0+5i, issue_end=1+5i, completion=1+5i
+produce(i): start=1+5i, issue_end=2+5i, completion=5+5i
+```
+
+The prologue publication is ready before `consume(1)` at `4 <= 5`. In the
+body, `consume(i)` completes before `produce(i)` overwrites the carried shared
+allocation, and `produce(i)` completes before `consume(i+1)`. The producer and
+consumer issue in adjacent lanes while the prologue uses the external init and
+the final iteration has no required next consumer. Expanding the prefix must
+produce ordinary v3 rows accepted by the independent verifier.
 
 #### Plan
 - [x] step 6.0 Freeze fixed warpgroup ownership in program v2, problem v3, and
@@ -767,8 +775,16 @@ rows that the existing independent verifier can check.
   initiation interval and operation start offsets. Apply one static lane-local
   order across all finite iterations, retain completion-based SSA/sync/lifetime
   constraints, and verify the derived interval without adding schedule fields.
-- [ ] step 6.2 Specify the finite prologue, periodic body, and finite epilogue
-  boundary contract without adding a serialized periodic result type.
+- [x] step 6.2 Implement the compact finite prologue, periodic body, and finite
+  epilogue boundary contract without adding a serialized periodic result type.
+  The v3 CP-SAT model has one `II`, one body start offset and one finite
+  prologue start per static operation, and one cyclic order per fixed warp
+  group; later body rows are materialized without per-iteration operation
+  timing decisions. Iteration zero uses the external loop init, carried shared
+  overwrite applies from iteration one, and the final iteration has no
+  successor requirement. Explicit resource windows participate in finite
+  capacity constraints; an infinite period-boundary resource proof remains in
+  step 6.4.
 - [ ] step 6.3 Define the finite makespan objective and deterministic tie-breaks;
   prove why minimizing `II` alone is insufficient for fixed finite `N`.
 - [ ] step 6.4 Define periodic lane/resource boundary checks, including windows

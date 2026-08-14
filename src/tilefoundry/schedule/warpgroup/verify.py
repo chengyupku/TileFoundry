@@ -268,13 +268,13 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
             _fail(f"timed operation {instance!r} has the wrong duration: issue duration")
         if timed.completion - timed.start != operation.completion_latency:
             _fail(f"timed operation {instance!r} has the wrong duration: completion latency")
-    if problem.format == PROBLEM_FORMAT_V3 and problem.loop.iterations >= 2:
+    if problem.format == PROBLEM_FORMAT_V3 and problem.loop.iterations >= 3:
         first_operation = min(expected_operations)
-        initiation_interval = times[(1, first_operation)].start - times[(0, first_operation)].start
+        initiation_interval = times[(2, first_operation)].start - times[(1, first_operation)].start
         if initiation_interval <= 0:
             _fail("v3 periodic initiation interval must be positive")
         for operation_id in sorted(expected_operations):
-            for iteration in range(problem.loop.iterations - 1):
+            for iteration in range(1, problem.loop.iterations - 1):
                 actual = (
                     times[(iteration + 1, operation_id)].start
                     - times[(iteration, operation_id)].start
