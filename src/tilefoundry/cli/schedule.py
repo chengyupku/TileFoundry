@@ -44,8 +44,15 @@ def _render_warpgroup_result(result: WarpgroupScheduleResult) -> str:
         lines.append(f"lane {lane_index}: {' -> '.join(lane.operations) or '(empty)'}")
         for iteration in iterations:
             intervals = " ".join(
-                f"{operation_id}[{times[(iteration, operation_id)].start},"
-                f"{times[(iteration, operation_id)].end})"
+                (
+                    f"{operation_id}[{times[(iteration, operation_id)].start},"
+                    f"{times[(iteration, operation_id)].end})"
+                    if times[(iteration, operation_id)].issue_end
+                    == times[(iteration, operation_id)].end
+                    else f"{operation_id}[{times[(iteration, operation_id)].start},"
+                    f"{times[(iteration, operation_id)].issue_end}|"
+                    f"{times[(iteration, operation_id)].end})"
+                )
                 for operation_id in lane.operations
             )
             lines.append(f"  iteration {iteration}: {intervals or '(empty)'}")

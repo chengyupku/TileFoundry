@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 from .errors import WarpgroupVerificationError
-from .model import SCHEDULE_FORMAT, WarpgroupProblem, WarpgroupSchedule
+from .model import (
+    PROBLEM_FORMAT,
+    PROBLEM_FORMAT_V2,
+    PROBLEM_FORMAT_V3,
+    SCHEDULE_FORMAT,
+    SCHEDULE_FORMAT_V2,
+    SCHEDULE_FORMAT_V3,
+    WarpgroupProblem,
+    WarpgroupSchedule,
+)
 from .solve import WarpgroupSolveResult
 from .verify import (
-    _control_edges,
+    _completion_event_edges,
+    _event_reachable,
     _expand_relation,
-    _reachable,
-    _required_shared_relations,
+    _required_completion_relations,
     verify_warpgroup_schedule,
 )
 
@@ -36,25 +45,29 @@ def export_warpgroup_schedule(
 
     candidates = tuple(
         relation
-        for relation in _required_shared_relations(problem)
+        for relation in _required_completion_relations(problem)
         if relation.distance < problem.loop.iterations
-        and lane_by_operation[relation.after] != lane_by_operation[relation.before]
     )
-    complete = WarpgroupSchedule(SCHEDULE_FORMAT, result.lanes, candidates, result.times)
+    schedule_format = {
+        PROBLEM_FORMAT: SCHEDULE_FORMAT,
+        PROBLEM_FORMAT_V2: SCHEDULE_FORMAT_V2,
+        PROBLEM_FORMAT_V3: SCHEDULE_FORMAT_V3,
+    }[problem.format]
+    complete = WarpgroupSchedule(schedule_format, result.lanes, candidates, result.times)
     verify_warpgroup_schedule(problem, complete)
 
     retained = list(candidates)
     for candidate in candidates:
         trial = tuple(item for item in retained if item != candidate)
-        trial_schedule = WarpgroupSchedule(SCHEDULE_FORMAT, result.lanes, trial, result.times)
-        control = _control_edges(trial_schedule, problem.loop.iterations)
+        trial_schedule = WarpgroupSchedule(schedule_format, result.lanes, trial, result.times)
+        control = _completion_event_edges(problem, trial_schedule)
         if all(
-            _reachable(control, after, before)
+            _event_reachable(control, after, before)
             for after, before in _expand_relation(candidate, problem.loop.iterations)
         ):
             retained.remove(candidate)
 
-    schedule = WarpgroupSchedule(SCHEDULE_FORMAT, result.lanes, tuple(retained), result.times)
+    schedule = WarpgroupSchedule(schedule_format, result.lanes, tuple(retained), result.times)
     verify_warpgroup_schedule(problem, schedule)
     return schedule
 

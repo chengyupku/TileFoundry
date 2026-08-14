@@ -532,62 +532,87 @@ does not require one implementation file per listed name.
 - [x] A milestone that changes a public contract MUST list the owning `docs/spec/*.md` path in its `#### Related Files`; one that changes none lists no spec path. <!-- policy_ac: spec_impact-0 -->
 <!-- policy_ac:end -->
 
-### Milestone M5: Populate A Calibrated B200 Cost Catalog
+### Milestone M5: External TileProf B200 Calibration Gate
 
 #### Depends
 - M4
 
 #### Golden Reference
-- Source: [cost-model CUDA benchmark contract](../spec/cost-model.md#83-cuda-benchmark-contract), the retained B200 local CUDA runner, NVIDIA instruction semantics, and FlashMLA sparse prefill `csrc/sm90/prefill/sparse/phase1.cuh`.
-- Functional points: correctness-checked B200 measurements; exact canonical
-  keys; setup excluded from timing; frozen catalog consumed through the M1
-  interface; no solver-contract change.
+- Source: [TileProf integration boundary](../design/tileprof-integration.md),
+  TileProf's own record and benchmark contracts, NVIDIA instruction semantics,
+  and FlashMLA sparse prefill `csrc/sm90/prefill/sparse/phase1.cuh`.
+- Functional points: TileProf-owned correctness-checked B200 measurements and
+  provenance; exact read-only artifact matching; explicit asynchronous timing,
+  quantization, and resource contracts; no implicit profiling or fallback.
 
 #### Related Files
 - `docs/spec/schedule.md`
-- `costmodel/src/tilefoundry_costmodel/profiler/cuda/runner.py`
-- `costmodel/src/tilefoundry_costmodel/profiles/store.py`
-- `costmodel/src/tilefoundry_costmodel/implementations/b200/`
-- `costmodel/benchmarks/warpgroup/`
-- `costmodel/calibration/b200-warpgroup-costs.json`
-- `src/tilefoundry/target/cuda/warpgroup_costs.py`
-- `tests/schedule/test_warpgroup_schedule.py`
-- `costmodel/tests/test_cuda_profiler.py`
+- `docs/design/tileprof-integration.md`
+
+Profiling providers, CUDA benchmarks, offline/online cross-checks, provenance,
+record storage, and B200 calibration are delegated to TileProf. The current
+TileFoundry host-side coverage work is frozen as design evidence and is not a
+measured catalog. TileFoundry owns only the generic cost interfaces and v2
+problem codec; it does not implement an artifact adapter. TileProf may
+implement `CostLibrary` directly or generate a `WarpgroupProblem` v2 document.
+This external gate does not block generic scheduler milestones.
 
 #### Plan
-- [ ] step 5.1 Define the measured coverage matrix required by the retained
-  reference: global-to-shared KV copy, shared/shared QK MMA,
-  register/shared local PV MMA, shared/shared remote PV MMA, fused online
-  softmax, register rescale, and register-to-shared publication for row and
-  probability values.
-- [ ] step 5.2 Add correctness-checked benchmark providers using the existing
-  CUDA runner and profile-store transaction rules. Measure latency and, where
-  concurrent issue is modeled, initiation interval under the exact shape,
-  dtype, memory-space, and implementation conditions.
-- [ ] step 5.3 Export stable measurements into a frozen catalog keyed by the M1
-  canonical operation signatures. Record hardware, environment, statistic,
-  source digest, and measurement provenance in the artifact without copying
-  that provenance into `WarpgroupProblem`.
-- [ ] step 5.4 Load the frozen catalog through the main-package cost-library
-  protocol and rebuild the FlashMLA problem. Missing measured coverage remains
-  an explicit build failure; no synthetic production fallback is permitted.
+- [x] step 5.1 Define the measured coverage matrix required by the retained
+  reference: global-to-shared copy, shared matmul, register/shared matmul,
+  shared composite matmul, fused reduction and elementwise compute, register
+  rescale, and register-to-shared publication. The matrix maps exact M1
+  signatures and contains no workload operation IDs, roles, lane assignment,
+  or ownership inference. It does not assert that a TileProf B200 record exists.
+- [ ] step 5.2 Produce the correctness-checked `sm_100a` benchmark corpus and
+  external integration evidence in TileProf. TileProf must resolve complete
+  `TileOpSpec` identity before implementing `CostLibrary` entries or emitting
+  `WarpgroupProblem` v2. Measurements must retain exact shape, dtype, layout,
+  warp, CUDA-version, provenance, validity, grounding, timing-statistic, and
+  resource-contract facts. TileFoundry does not implement or invoke these
+  providers, and this gate does not block scheduler development.
+- [x] step 5.3 Specify TileFoundry's asynchronous timing, integer quantization,
+  statistic-selection, sensitivity, and resource-mapping contracts. The
+  version-2 problem and schedule records separate positive integer issue
+  duration from completion latency and carry explicit offset resource windows;
+  version 1 normalizes to the same solver/verifier as synchronous timing. The
+  finite solver uses issue occupancy for lane order, completion for SSA,
+  loop-carried, shared handoff, reuse, and lifetime relations, and explicit
+  windows for capacity. Sync export considers every uniformly representable
+  completion relation and uses a start/issue/completion event graph for exact
+  reduction; same-lane asynchronous dependencies remain explicit unless an
+  actual completion path proves them. Conditional carried-shared overwrite is
+  retained only as its problem-aware `i >= 1` finite edge. The contract uses
+  per-field `ceil`, requires an explicit primary statistic, isolates sensitivity
+  solves, and fails on a missing versioned resource mapping. Focused and full
+  schedule suites, strict typing and formatting, v1/v2 schema validation, isolated
+  dependency loading, and wheel-content checks retain the evidence.
+- [ ] step 5.4 Validate the external handoff: TileProf either implements the
+  existing exact `CostLibrary` protocol or emits a strict `WarpgroupProblem` v2
+  document. TileFoundry consumes only that generic typed boundary and never
+  parses TileProf JSONL, manifests, provenance, or databases. Missing,
+  ambiguous, invalid, unverified, wrong-architecture, or wrong-CUDA-version
+  measurements remain external gate failures; no synthetic production fallback
+  is permitted.
 - [ ] step 5.5 Compare the selected schedule and predicted makespan with the
   handwritten FlashMLA schedule on B200. Record differences in lane order,
   synchronization, overlap, and measured end-to-end timing before claiming the
-  catalog useful for search.
+  artifact useful for search.
 
 #### Acceptance Criteria
 - [ ] AC-5-1: Every operation signature reached by the retained FlashMLA
-  program resolves from a frozen, correctness-checked B200 measurement with no
-  fixture or default timing.
+  program resolves exactly from a frozen, correctness-checked TileProf B200
+  record artifact with no fixture, nearest match, or default timing.
 - [ ] AC-5-2: Compilation, allocation, initialization, argument setup, and
-  first-use overhead are absent from recorded operation durations.
+  first-use overhead are absent from TileProf timing records, and issue
+  occupancy and completion readiness retain their distinct scheduling meaning.
 - [ ] AC-5-3: Renaming the reference program leaves all cost hits unchanged;
   changing a measured semantic/type condition causes an exact miss unless that
   condition was separately calibrated.
 - [ ] AC-5-4: The frozen catalog builds a replayable numeric problem on a B200
-  host, and that problem solves byte-identically on a host without CUDA or the
-  profile database under the same deterministic solver version.
+  host, and that problem solves byte-identically on a host without CUDA,
+  TileProf runtime, or a profile database under the same deterministic solver
+  version.
 - [ ] AC-5-5: The B200 result is compared against the handwritten reference for
   schedule structure and measured end-to-end performance; unexplained missing
   synchronization or illegal overlap is a gate failure regardless of predicted
@@ -599,11 +624,184 @@ does not require one implementation file per listed name.
 - [ ] A milestone that changes a public contract MUST list the owning `docs/spec/*.md` path in its `#### Related Files`; one that changes none lists no spec path. <!-- policy_ac: spec_impact-0 -->
 <!-- policy_ac:end -->
 
+### Milestone M6: Compact Periodic Warpgroup Scheduling
+
+#### Depends
+- M4
+- M5.3
+
+M6 does not depend on a TileProf artifact, B200 measurement, CUDA runtime, or
+the external M5.2 gate. M6.0 first fixes operation ownership in a versioned
+boundary; later periodic work is a generic scheduling milestone over
+`WarpgroupProblem` v3.
+
+#### Golden Reference
+- Source: [schedule problem and schedule semantics](../spec/schedule.md#63-warpgroupproblem),
+  [finite schedule semantics](../spec/schedule.md#65-warpgroupschedule), and the
+  deterministic finite solver/verifier contract already established by M2/M3.
+- Functional points: fixed ownership, periodic issue legality, completion
+  dependencies, resource capacity over infinite repetition, finite boundary
+  handling, and materialized schedule verification.
+
+#### Related Files
+- `docs/spec/schedule.md`
+- `docs/plans/warpgroup-pipeline-search.md`
+- `src/tilefoundry/schedule/warpgroup/model.py`
+- `src/tilefoundry/schedule/warpgroup/serialization.py`
+- `src/tilefoundry/schedule/warpgroup/solve.py`
+
+#### Input Boundary
+
+M6.0 accepts program v2 and closes it to an already closed
+`WarpgroupProblem` v3. Every operation supplies a fixed `warp_group`; it is
+copied through cost closure and never inferred from operation names. The v3
+problem supplies the finite loop body, positive integer issue/completion costs,
+explicit resource windows and capacities, SSA-derived dependencies, and shared
+memory semantics. M6 adds no authored-program fields beyond the ownership
+version, operation roles, implementation choices,
+phases, pipeline depth, objective fields, or hardware fields.
+
+Legacy program v1/problem v1-v2/schedule v1-v2 remain on the anonymous finite
+placement path. Only v3 selects fixed ownership; lane assignment is not a
+solver variable and output lane index is the declared group index.
+
+#### Mathematical Contract
+
+For every loop-body operation `op` and every integer iteration `i >= 0`, there
+is exactly one instance. A steady-state body has one positive integer initiation
+interval `II` and one integer `start_offset(op)` such that:
+
+```text
+start(i, op) = start_offset(op) + i * II
+issue_end(i, op) = start(i, op) + issue_duration(op)
+completion(i, op) = start(i, op) + completion_latency(op)
+```
+
+For every SSA or exported synchronization relation `(after, before, distance)`
+and each valid finite or steady-state iteration:
+
+```text
+completion(i, after) <= start(i + distance, before)
+```
+
+Distance zero is same-iteration; distance one is next-iteration. The
+iteration-zero external init has no preceding body definition. A carried shared
+allocation overwrite is required only for `i >= 1`, and the final iteration has
+no successor-use requirement. These boundary exceptions are finite semantic
+edges; they are not silently folded into one all-iterations periodic edge.
+
+For each lane, issue intervals must be legal for the infinite repetition. For
+adjacent body operations `a -> b` on one lane,
+`issue_end_offset(a) <= start_offset(b)`. The wrap edge must satisfy
+`issue_end_offset(last) <= start_offset(first) + II`. The same inequalities
+apply after every period shift. Completion sync remains separate from issue
+order, including for same-lane asynchronous dependencies.
+
+For each explicit resource window, every shifted interval
+
+```text
+[start_offset(op) + window.start_offset + i * II,
+ start_offset(op) + window.start_offset + window.duration + i * II)
+```
+
+must satisfy the declared capacity at every time across all integer `i`. The
+periodic capacity check must include windows crossing the period boundary; a
+single representative period is valid only after its boundary overlaps with
+the preceding and following periods have been checked.
+
+For a fixed finite `iterations = N`, the objective cannot be only `min II`.
+The result must minimize the maximum completion over `0 <= i < N`, including
+start offsets and finite prologue/epilogue work. A smaller steady-state II can
+have a worse finite makespan when its phase or boundary work is later.
+
+#### Boundary And Output Decision
+
+Three representations were considered:
+
+| Representation | Decision |
+| --- | --- |
+| One steady-state template for all iterations | Rejected: it cannot express external iteration-zero init, `i >= 1` carried overwrite, or the final iteration without a successor. |
+| Finite prologue + periodic body + finite epilogue | Chosen mathematical model: boundary instances are finite, while the repeated middle uses `II` and offsets. |
+| A new periodic JSON/schema result | Rejected for M6: periodic data is materialized on demand into existing `WarpgroupSchedule` v3. |
+
+The conceptual periodic certificate has only values that are not derivable
+from the closed problem: existing lane body order, `II`, and per-operation
+`start_offset`. Boundary rows and completion sync are also required when
+materializing a finite result because they are not derivable from a body
+template alone. These are design quantities, not new public fields or Python
+records. The public output remains the existing v3 fields
+`format`, `lanes`, `sync`, and `times` after materialization.
+
+#### Generic Example
+
+Consider two lanes and a two-iteration body:
+
+```text
+lane 0: produce   issue=1, completion=4, writes shared `%next`
+lane 1: consume   issue=1, completion=1, reads carried shared `%carry`
+```
+
+`%carry` is externally initialized for iteration zero and yields `%next`.
+Choose `II = 3`, `start_offset(produce) = 0`, and
+`start_offset(consume) = 1`:
+
+```text
+produce(i): start=0+3i, issue_end=1+3i, completion=4+3i
+consume(i): start=1+3i, issue_end=2+3i, completion=2+3i
+```
+
+`produce(i) -> consume(i+1)` is ready at `4+3i <= 1+3(i+1)` only when the
+chosen offsets and `II` satisfy the relation; `consume(i)` completes before
+the next `produce(i+1)` overwrite at `2+3i <= 3+3i`. The producer and consumer
+issue in adjacent lanes while completion and reuse overlap across iterations.
+Iteration zero consumes the external init, and the final iteration has no
+required next consumer. Expanding a finite prefix must produce ordinary v3
+rows that the existing independent verifier can check.
+
+#### Plan
+- [x] step 6.0 Freeze fixed warpgroup ownership in program v2, problem v3, and
+  schedule v3. Propagate `warp_group` exactly, remove placement variables from
+  the v3 solver path, preserve empty groups, and keep legacy anonymous formats
+  unchanged.
+- [ ] step 6.1 Freeze the v3-only periodic input and the exact finite expansion
+  rules for SSA, sync distance, shared lifetime, lane issue order, and resource
+  windows.
+- [ ] step 6.2 Specify the finite prologue, periodic body, and finite epilogue
+  boundary contract without adding a serialized periodic result type.
+- [ ] step 6.3 Define the finite makespan objective and deterministic tie-breaks;
+  prove why minimizing `II` alone is insufficient for fixed finite `N`.
+- [ ] step 6.4 Define periodic lane/resource boundary checks, including windows
+  crossing the period boundary and completion sync that cannot be inferred from
+  issue order.
+- [ ] step 6.5 Define materialization of any finite prefix into existing
+  `WarpgroupSchedule` v3 and independent verifier checks.
+
+#### Acceptance Criteria
+- [ ] AC-6-1: Periodic result size is independent of the requested iteration
+count; only on-demand v3 materialization grows with finite `N`.
+- [ ] AC-6-2: Any materialized prefix is accepted or rejected by the existing
+  independent verifier with no periodic-specific verifier path.
+- [ ] AC-6-3: Known small closed problems match the finite solver's optimal
+  makespan after materialization, including boundary work.
+- [ ] AC-6-4: Required completion synchronization, including same-lane async
+  dependencies and carried-shared finite overwrite edges, is never dropped.
+- [ ] AC-6-5: Infinite lane issue intervals and resource windows remain legal at
+  every period boundary.
+- [ ] AC-6-6: Repeated deterministic inputs produce identical periodic values
+and identical materialized v3 schedules.
+- [ ] AC-6-7: The design and eventual implementation load no TileProf, CUDA,
+  target implementation, or operation-name-specific rule.
+<!-- policy_ac:start -->
+- [ ] Milestone MUST name a `#### Golden Reference` before implementation steps, with the source of truth and the observable functional points it determines. <!-- policy_ac: milestone_review-0 -->
+- [ ] The gate request MUST show the Golden Reference's functional points exercised through the smallest real workflow, naming the retained evidence; one workflow MAY cover several ACs, and a new test requires a stated reachability gap. <!-- policy_ac: milestone_review-1 -->
+- [ ] Touched tests and comments MUST be reviewed for redundancy: remove ones superseded by the retained workflow, and do not add source-shape or hypothetical-refactor guards unless that form is a public contract. <!-- policy_ac: milestone_review-2 -->
+- [ ] A milestone that changes a public contract MUST list the owning `docs/spec/*.md` path in its `#### Related Files`; one that changes none lists no spec path. <!-- policy_ac: spec_impact-0 -->
+<!-- policy_ac:end -->
+
 ## Deferred Work
 
-The following work starts only after M5 review:
+The following work starts only after M6 review:
 
-- a compact periodic solver for large iteration counts;
 - search over microtiling, fusion, implementation choice, or pipeline depth;
 - physical shared-memory packing and ring-buffer allocation;
 - lowering `sync` to barrier participants, slots, phases, fences, and waits;
@@ -615,5 +813,5 @@ The following work starts only after M5 review:
 
 <!-- final_gate:start -->
 - [ ] Spec section MUST NOT enumerate test names; the pre-commit `spec-rules-lint` and `english-only` hooks already reject forbidden section headers, plan / milestone / task / PR / commit references, agent names, and non-English text. <!-- policy_final: spec_discipline-0 -->
-- [ ] No touched C++/CUDA files in this plan — clang-format gate N/A <!-- policy_final: clang_format-na -->
+- [x] Touched C++/CUDA files (`*.h`/`*.hpp`/`*.cuh`/`*.cu`/`*.cpp`/`*.cc`) MUST be formatted by the pre-commit `clang-format` hook (or an equivalent `clang-format --dry-run -Werror` check). <!-- policy_final: clang_format-0 -->
 <!-- final_gate:end -->

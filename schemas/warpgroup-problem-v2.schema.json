@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tilefoundry.dev/schemas/warpgroup-problem-v2.schema.json",
+  "title": "TileFoundry Warpgroup Problem v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "time_unit", "warp_groups", "resources", "types", "inputs", "loop"],
+  "properties": {
+    "format": {"const": "tilefoundry.warpgroup_problem.v2"},
+    "time_unit": {"$ref": "#/$defs/id"},
+    "warp_groups": {"$ref": "#/$defs/positiveInteger"},
+    "resources": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/id"},
+      "additionalProperties": {"$ref": "#/$defs/positiveInteger"}
+    },
+    "types": {"$ref": "#/$defs/types"},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "loop": {"$ref": "#/$defs/problemLoop"}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$", "not": {"pattern": "[\\r\\n]"}},
+    "ssa": {"type": "string", "pattern": "^%[A-Za-z_][A-Za-z0-9_.-]*$", "not": {"pattern": "[\\r\\n]"}},
+    "positiveInteger": {"type": "integer", "minimum": 1},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "dtype": {"enum": ["i1", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "fp8_e4m3fn", "fp8_e5m2", "fp16", "bf16", "fp32", "fp64"]},
+    "tensorType": {
+      "type": "object", "additionalProperties": false, "required": ["shape", "dtype", "space"],
+      "properties": {
+        "shape": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/positiveInteger"}},
+        "dtype": {"$ref": "#/$defs/dtype"},
+        "space": {"enum": ["register", "shared", "global"]}
+      }
+    },
+    "types": {"type": "object", "minProperties": 1, "propertyNames": {"$ref": "#/$defs/id"}, "additionalProperties": {"$ref": "#/$defs/tensorType"}},
+    "input": {"type": "object", "additionalProperties": false, "required": ["id", "type"], "properties": {"id": {"$ref": "#/$defs/ssa"}, "type": {"$ref": "#/$defs/id"}}},
+    "inputs": {"type": "array", "items": {"$ref": "#/$defs/input"}},
+    "scalar": {"oneOf": [{"type": "number"}, {"const": "-inf"}]},
+    "value": {"oneOf": [{"$ref": "#/$defs/ssa"}, {"$ref": "#/$defs/scalar"}, {"$ref": "#/$defs/expression"}]},
+    "indexExpression": {"type": "array", "minItems": 3, "prefixItems": [{"const": "index"}, {"$ref": "#/$defs/ssa"}], "items": {"oneOf": [{"$ref": "#/$defs/nonNegativeInteger"}, {"$ref": "#/$defs/ssa"}]}},
+    "unaryExpression": {"type": "array", "prefixItems": [{"enum": ["copy", "cast", "transpose", "exp"]}, {"$ref": "#/$defs/value"}], "items": false, "minItems": 2, "maxItems": 2},
+    "binaryExpression": {"type": "array", "prefixItems": [{"enum": ["matmul", "sub"]}, {"$ref": "#/$defs/value"}, {"$ref": "#/$defs/value"}], "items": false, "minItems": 3, "maxItems": 3},
+    "variadicExpression": {"type": "array", "minItems": 3, "prefixItems": [{"enum": ["add", "mul", "max"]}], "items": {"$ref": "#/$defs/value"}},
+    "concatExpression": {"type": "array", "minItems": 4, "prefixItems": [{"const": "concat"}, {"$ref": "#/$defs/nonNegativeInteger"}], "items": {"$ref": "#/$defs/value"}},
+    "selectExpression": {"type": "array", "prefixItems": [{"const": "select"}, {"$ref": "#/$defs/value"}, {"$ref": "#/$defs/value"}, {"$ref": "#/$defs/value"}], "items": false, "minItems": 4, "maxItems": 4},
+    "reduceExpression": {"type": "array", "prefixItems": [{"const": "reduce"}, {"enum": ["max", "sum"]}, {"$ref": "#/$defs/nonNegativeInteger"}, {"$ref": "#/$defs/value"}], "items": false, "minItems": 4, "maxItems": 4},
+    "expression": {"oneOf": [{"$ref": "#/$defs/indexExpression"}, {"$ref": "#/$defs/unaryExpression"}, {"$ref": "#/$defs/binaryExpression"}, {"$ref": "#/$defs/variadicExpression"}, {"$ref": "#/$defs/concatExpression"}, {"$ref": "#/$defs/selectExpression"}, {"$ref": "#/$defs/reduceExpression"}]},
+    "output": {"type": "object", "additionalProperties": false, "required": ["id", "type", "expr"], "properties": {"id": {"$ref": "#/$defs/ssa"}, "type": {"$ref": "#/$defs/id"}, "expr": {"$ref": "#/$defs/value"}}},
+    "iterArg": {"type": "object", "additionalProperties": false, "required": ["id", "init", "yield"], "properties": {"id": {"$ref": "#/$defs/ssa"}, "init": {"oneOf": [{"$ref": "#/$defs/ssa"}, {"$ref": "#/$defs/scalar"}]}, "yield": {"$ref": "#/$defs/ssa"}}},
+    "resourceWindow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resource_id", "amount", "start_offset", "duration"],
+      "properties": {
+        "resource_id": {"$ref": "#/$defs/id"},
+        "amount": {"$ref": "#/$defs/positiveInteger"},
+        "start_offset": {"$ref": "#/$defs/nonNegativeInteger"},
+        "duration": {"$ref": "#/$defs/positiveInteger"}
+      }
+    },
+    "operation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "outputs", "issue_duration", "completion_latency", "resource_windows"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/output"}},
+        "issue_duration": {"$ref": "#/$defs/positiveInteger"},
+        "completion_latency": {"$ref": "#/$defs/positiveInteger"},
+        "resource_windows": {"type": "array", "items": {"$ref": "#/$defs/resourceWindow"}}
+      }
+    },
+    "problemLoop": {
+      "type": "object", "additionalProperties": false, "required": ["index", "iterations", "iter_args", "ops"],
+      "properties": {
+        "index": {"$ref": "#/$defs/ssa"},
+        "iterations": {"$ref": "#/$defs/positiveInteger"},
+        "iter_args": {"type": "array", "items": {"$ref": "#/$defs/iterArg"}},
+        "ops": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/operation"}}
+      }
+    }
+  }
+}

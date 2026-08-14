@@ -29,7 +29,7 @@ class WarpgroupScheduleResult:
         object.__setattr__(
             self,
             "makespan",
-            max((timed.end for timed in self.schedule.times), default=0),
+            max((timed.completion for timed in self.schedule.times), default=0),
         )
 
 

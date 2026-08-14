@@ -16,8 +16,13 @@ from referencing import Registry, Resource
 
 from tilefoundry.schedule.warpgroup import (
     PROBLEM_FORMAT,
+    PROBLEM_FORMAT_V2,
+    PROBLEM_FORMAT_V3,
     PROGRAM_FORMAT,
+    PROGRAM_FORMAT_V2,
     SCHEDULE_FORMAT,
+    SCHEDULE_FORMAT_V2,
+    SCHEDULE_FORMAT_V3,
     DefUseDependency,
     DType,
     ElementwiseExpression,
@@ -38,6 +43,7 @@ from tilefoundry.schedule.warpgroup import (
     ProgramOperation,
     ResourceCapacity,
     ResourceDemand,
+    ResourceWindow,
     ScalarLiteral,
     SynchronizationEdge,
     TensorType,
@@ -72,6 +78,13 @@ from tilefoundry.schedule.warpgroup.expression import (
     CopyExpression,
     IndexExpression,
     value_references,
+)
+from tilefoundry.target.cuda.warpgroup_costs import (
+    B200CalibrationMissingError,
+    B200OperationFamily,
+    CalibrationStatus,
+    b200_global_to_shared_copy_signature,
+    b200_warpgroup_coverage_matrix,
 )
 
 ROOT = Path(__file__).parents[2]
@@ -188,6 +201,47 @@ def _library(program: WarpgroupProgram) -> OperationCostLibrary:
         )
     )
     return OperationCostLibrary("cycle", (ResourceCapacity("engine", 1),), entries)
+
+
+def test_m5_b200_coverage_is_exact_and_has_no_fallback_measurement() -> None:
+    signature = b200_global_to_shared_copy_signature()
+    assert (
+        signature.canonical_key
+        == (
+            ROOT / "costmodel" / "benchmarks" / "warpgroup" / "global-to-shared-copy.signature.json"
+        )
+        .read_text(encoding="utf-8")
+        .strip()
+    )
+    matrix = b200_warpgroup_coverage_matrix((signature,))
+    ready = tuple(
+        item for item in matrix.entries if item.status is CalibrationStatus.PROVIDER_READY
+    )
+    assert len(ready) == 1
+    assert not any(hasattr(item, "duration") for item in matrix.entries)
+    entry = ready[0]
+    assert entry.family is B200OperationFamily.GLOBAL_TO_SHARED_COPY
+    assert entry.signature.kind is OperationKind.COPY
+    assert entry.signature.operands[0].shape == (64, 64)
+    assert entry.signature.operands[0].dtype is DType.BF16
+    assert entry.signature.operands[0].space is MemorySpace.GLOBAL
+    assert entry.signature.outputs[0].type.space is MemorySpace.SHARED
+    assert {item.name for item in entry.conditions} == {
+        "cuda_arch",
+        "hardware",
+        "pipeline_depth",
+    }
+    assert {item.resource_id for item in entry.resources} == {
+        "b200.cuda_core",
+        "b200.gmem_read",
+        "b200.smem_write",
+        "b200.warp_issue",
+    }
+    for entry in matrix.entries:
+        with pytest.raises(B200CalibrationMissingError, match="missing correctness-checked"):
+            matrix.require_measured(entry.signature)
+    with pytest.raises(B200CalibrationMissingError, match="missing correctness-checked"):
+        matrix.lookup(dataclasses.replace(signature, kind=OperationKind.COMPUTE))
 
 
 def _rename_program(program: WarpgroupProgram) -> WarpgroupProgram:
@@ -1091,6 +1145,381 @@ def test_m2_repeated_deterministic_solves_are_identical() -> None:
     assert solve_warpgroup_problem(problem) == solve_warpgroup_problem(problem)
 
 
+def _fixed_owner_program() -> WarpgroupProgram:
+    program = _generic_values()[0]
+    operations = tuple(
+        ProgramOperation(operation.id, operation.outputs, 1 if operation.id == "independent" else 0)
+        for operation in program.loop.ops
+    )
+    return WarpgroupProgram(
+        PROGRAM_FORMAT_V2,
+        3,
+        program.types,
+        program.inputs,
+        ProgramLoop(
+            program.loop.index, program.loop.iterations, program.loop.iter_args, operations
+        ),
+    )
+
+
+def test_m6_fixed_owner_build_round_trip_keeps_empty_group() -> None:
+    program = _fixed_owner_program()
+    problem = build_warpgroup_problem(program, _library(program))
+
+    assert problem.format == PROBLEM_FORMAT_V3
+    assert {item.id: item.warp_group for item in problem.loop.ops} == {
+        "advance": 0,
+        "independent": 1,
+        "load": 0,
+    }
+    encoded_program = warpgroup_program_to_json(program)
+    encoded_problem = warpgroup_problem_to_json(problem)
+    assert warpgroup_program_from_json(encoded_program) == program
+    assert warpgroup_problem_from_json(encoded_problem) == problem
+    _validator("warpgroup-program-v2.schema.json").validate(json.loads(encoded_program))
+    _validator("warpgroup-problem-v3.schema.json").validate(json.loads(encoded_problem))
+
+    result = schedule_warpgroups(problem)
+    assert result.schedule.format == SCHEDULE_FORMAT_V3
+    assert len(result.schedule.lanes) == 3
+    assert result.schedule.lanes[2].operations == ()
+    assert set(result.schedule.lanes[0].operations) == {"load", "advance"}
+    assert result.schedule.lanes[1].operations == ("independent",)
+    verify_warpgroup_schedule(problem, result.schedule)
+    encoded_schedule = warpgroup_schedule_to_json(result.schedule)
+    assert warpgroup_schedule_from_json(encoded_schedule) == result.schedule
+    _validator("warpgroup-schedule-v3.schema.json").validate(json.loads(encoded_schedule))
+    assert result == schedule_warpgroups(problem)
+
+
+def test_m6_fixed_owner_searches_same_group_order_without_migration() -> None:
+    value_type = TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER)
+    problem = WarpgroupProblem(
+        PROBLEM_FORMAT_V3,
+        "cycle",
+        3,
+        (),
+        (value_type,),
+        (),
+        ProblemLoop(
+            "%iteration",
+            1,
+            (),
+            (
+                ProblemOperation(
+                    "short",
+                    (OperationOutput("%short", "value", ScalarLiteral(1.0)),),
+                    2,
+                    (),
+                    warp_group=0,
+                ),
+                ProblemOperation(
+                    "long",
+                    (OperationOutput("%long", "value", ScalarLiteral(1.0)),),
+                    3,
+                    (),
+                    warp_group=0,
+                ),
+                ProblemOperation(
+                    "other",
+                    (OperationOutput("%other", "value", ScalarLiteral(1.0)),),
+                    1,
+                    (),
+                    warp_group=1,
+                ),
+            ),
+        ),
+    )
+    result = solve_warpgroup_problem(problem)
+    assert result.makespan == 5
+    assert result.lanes[0].operations in (("short", "long"), ("long", "short"))
+    assert set(result.lanes[0].operations) == {"short", "long"}
+    assert result.lanes[1].operations == ("other",)
+    assert result.lanes[2].operations == ()
+
+
+def test_m6_fixed_owner_verifier_rejects_cross_group_move() -> None:
+    problem = build_warpgroup_problem(_fixed_owner_program(), _library(_fixed_owner_program()))
+    schedule = schedule_warpgroups(problem).schedule
+    moved = tuple(
+        WarpgroupLane(("independent", "load"))
+        if index == 1
+        else WarpgroupLane(tuple(operation for operation in lane.operations if operation != "load"))
+        if index == 0
+        else lane
+        for index, lane in enumerate(schedule.lanes)
+    )
+    moved_schedule = WarpgroupSchedule(SCHEDULE_FORMAT_V3, moved, schedule.sync, schedule.times)
+    with pytest.raises(WarpgroupVerificationError, match="expected warp_group"):
+        verify_warpgroup_schedule(problem, moved_schedule)
+
+
+@pytest.mark.parametrize(
+    ("problem_version", "schedule_version", "valid"),
+    (
+        ("v1", "v1", True),
+        ("v2", "v2", True),
+        ("v3", "v3", True),
+        ("v1", "v3", False),
+        ("v2", "v3", False),
+        ("v3", "v1", False),
+        ("v3", "v2", False),
+    ),
+)
+def test_m6_problem_schedule_formats_are_strictly_paired(
+    problem_version: str, schedule_version: str, valid: bool
+) -> None:
+    generic_problem = _generic_values()[1]
+    async_program = _async_program()
+    async_problem = build_warpgroup_problem(
+        async_program, _async_library(async_program, resource_windows=False)
+    )
+    fixed_program = _fixed_owner_program()
+    fixed_problem = build_warpgroup_problem(fixed_program, _library(fixed_program))
+    problems = {"v1": generic_problem, "v2": async_problem, "v3": fixed_problem}
+    schedules = {
+        "v1": schedule_warpgroups(generic_problem).schedule,
+        "v2": schedule_warpgroups(async_problem).schedule,
+        "v3": schedule_warpgroups(fixed_problem).schedule,
+    }
+    problem = problems[problem_version]
+    schedule = schedules[schedule_version]
+    if valid:
+        verify_warpgroup_schedule(problem, schedule)
+    else:
+        with pytest.raises(WarpgroupVerificationError, match="requires schedule"):
+            verify_warpgroup_schedule(problem, schedule)
+
+
+@pytest.mark.parametrize(
+    "invalid_expression",
+    (
+        ["copy", "%x", "%y"],
+        ["sub", "%x"],
+        ["reduce", "invalid", 0, "%x"],
+        ["select", "%condition", "%x"],
+    ),
+)
+def test_m6_new_schema_and_decoder_reject_invalid_expression_arity(
+    invalid_expression: list[object],
+) -> None:
+    program = _fixed_owner_program()
+    program_document = json.loads(warpgroup_program_to_json(program))
+    problem = build_warpgroup_problem(program, _library(program))
+    problem_document = json.loads(warpgroup_problem_to_json(problem))
+    for document, schema_name, decoder in (
+        (program_document, "warpgroup-program-v2.schema.json", warpgroup_program_from_json),
+        (problem_document, "warpgroup-problem-v3.schema.json", warpgroup_problem_from_json),
+    ):
+        document["loop"]["ops"][0]["outputs"][0]["expr"] = invalid_expression
+        assert list(_validator(schema_name).iter_errors(document))
+        with pytest.raises(WarpgroupSerializationError):
+            decoder(json.dumps(document))
+
+
+def _async_program() -> WarpgroupProgram:
+    types = (
+        TensorType("source", (2, 1), DType.FP32, MemorySpace.GLOBAL),
+        TensorType("shared", (1,), DType.FP32, MemorySpace.SHARED),
+        TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER),
+    )
+    return WarpgroupProgram(
+        PROGRAM_FORMAT,
+        1,
+        types,
+        (ProgramInput("%source", "source"), ProgramInput("%initial", "shared")),
+        ProgramLoop(
+            "%iteration",
+            2,
+            (LoopIterArg("%carry", ValueRef("%initial"), ValueRef("%shared")),),
+            (
+                ProgramOperation(
+                    "produce",
+                    (OperationOutput("%produced", "value", ScalarLiteral(1.0)),),
+                ),
+                ProgramOperation(
+                    "use",
+                    (OperationOutput("%used", "value", CopyExpression(ValueRef("%produced"))),),
+                ),
+                ProgramOperation(
+                    "publish",
+                    (
+                        OperationOutput(
+                            "%shared",
+                            "shared",
+                            CopyExpression(
+                                IndexExpression(ValueRef("%source"), (LoopIndexRef("%iteration"),))
+                            ),
+                        ),
+                    ),
+                ),
+                ProgramOperation(
+                    "consume",
+                    (OperationOutput("%consumed", "value", CopyExpression(ValueRef("%carry"))),),
+                ),
+            ),
+        ),
+    )
+
+
+def _async_library(program: WarpgroupProgram, *, resource_windows: bool) -> OperationCostLibrary:
+    costs = {
+        "produce": (2, 6),
+        "use": (1, 1),
+        "publish": (2, 6),
+        "consume": (1, 3),
+    }
+    entries = tuple(
+        OperationCostEntry(
+            operation_signature(program, operation),
+            OperationCost(
+                issue_duration=costs[operation.id][0],
+                completion_latency=costs[operation.id][1],
+                resource_windows=(ResourceWindow("engine", 1, 2, 4),)
+                if resource_windows and operation.id in {"produce", "publish"}
+                else (),
+            ),
+        )
+        for operation in program.loop.ops
+    )
+    return OperationCostLibrary(
+        "cycle",
+        (ResourceCapacity("engine", 1),) if resource_windows else (),
+        entries,
+    )
+
+
+def test_m5_async_timing_resource_windows_and_v1_replay_share_one_workflow() -> None:
+    program = _async_program()
+    library = _async_library(program, resource_windows=False)
+    problem = build_warpgroup_problem(program, library)
+    assert problem.format == PROBLEM_FORMAT_V2
+    assert warpgroup_problem_from_json(warpgroup_problem_to_json(problem)) == problem
+    _validator("warpgroup-problem-v2.schema.json").validate(
+        json.loads(warpgroup_problem_to_json(problem))
+    )
+
+    solved = schedule_warpgroups(program, library)
+    assert solved == schedule_warpgroups(problem)
+    schedule = solved.schedule
+    times = _time_map(solved.schedule)
+    produce = times[(0, "produce")]
+    use = times[(0, "use")]
+    publish = times[(0, "publish")]
+    assert produce.issue_end < produce.completion <= use.start
+    assert publish.completion <= times[(1, "consume")].start
+    assert times[(1, "consume")].completion <= times[(1, "publish")].start
+    assert solved.makespan == max(item.completion for item in solved.schedule.times)
+
+    assert schedule.format == SCHEDULE_FORMAT_V2
+    assert SynchronizationEdge("produce", "use", 0) in schedule.sync
+    assert SynchronizationEdge("consume", "publish", 1) not in schedule.sync
+    verify_warpgroup_schedule(problem, schedule)
+    encoded = warpgroup_schedule_to_json(schedule)
+    document = json.loads(encoded)
+    assert set(document) == {"format", "lanes", "sync", "times"}
+    assert all(len(row) == 5 for row in document["times"])
+    _validator("warpgroup-schedule-v2.schema.json").validate(document)
+    assert warpgroup_schedule_to_json(warpgroup_schedule_from_json(encoded)) == encoded
+
+    lane_overlap = tuple(
+        TimedOperation(
+            item.iteration,
+            item.operation_id,
+            produce.start + 1,
+            issue_end=produce.start + 2,
+            completion=produce.start + 2,
+        )
+        if item.operation_id == "use"
+        else item
+        for item in schedule.times
+    )
+    with pytest.raises(WarpgroupVerificationError, match="lane order"):
+        verify_warpgroup_schedule(
+            problem,
+            WarpgroupSchedule(SCHEDULE_FORMAT_V2, schedule.lanes, schedule.sync, lane_overlap),
+        )
+
+    resource_program = _async_program()
+    resource_library = _async_library(resource_program, resource_windows=True)
+    resource_problem = build_warpgroup_problem(resource_program, resource_library)
+    with pytest.raises(WarpgroupVerificationError, match="exceeds capacity"):
+        verify_warpgroup_schedule(resource_problem, schedule)
+    constrained = schedule_warpgroups(resource_problem)
+    verify_warpgroup_schedule(resource_problem, constrained.schedule)
+    assert constrained.makespan > solved.makespan
+    assert constrained.makespan == max(item.completion for item in constrained.schedule.times)
+
+    missing_register_sync = WarpgroupSchedule(
+        SCHEDULE_FORMAT_V2,
+        schedule.lanes,
+        tuple(edge for edge in schedule.sync if edge != SynchronizationEdge("produce", "use", 0)),
+        schedule.times,
+    )
+    with pytest.raises(WarpgroupVerificationError, match="no lane/sync path"):
+        verify_warpgroup_schedule(problem, missing_register_sync)
+
+    v1_problem = _generic_values()[1]
+    v1_schedule = export_warpgroup_schedule(v1_problem, solve_warpgroup_problem(v1_problem))
+    assert v1_schedule.format == SCHEDULE_FORMAT
+    assert all(item.issue_end == item.end for item in v1_schedule.times)
+    assert all(
+        len(row) == 4 for row in json.loads(warpgroup_schedule_to_json(v1_schedule))["times"]
+    )
+
+
+def test_m5_completion_event_graph_reduces_through_an_async_middle_operation() -> None:
+    value_type = TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER)
+    problem = WarpgroupProblem(
+        PROBLEM_FORMAT_V2,
+        "cycle",
+        1,
+        (),
+        (value_type,),
+        (),
+        ProblemLoop(
+            "%iteration",
+            1,
+            (),
+            (
+                ProblemOperation(
+                    "a",
+                    (OperationOutput("%a", "value", ScalarLiteral(1.0)),),
+                    issue_duration=1,
+                    completion_latency=1,
+                ),
+                ProblemOperation(
+                    "x",
+                    (OperationOutput("%x", "value", CopyExpression(ValueRef("%a"))),),
+                    issue_duration=1,
+                    completion_latency=4,
+                ),
+                ProblemOperation(
+                    "b",
+                    (
+                        OperationOutput(
+                            "%b",
+                            "value",
+                            ElementwiseExpression(
+                                ElementwiseOperator.ADD,
+                                (ValueRef("%a"), ValueRef("%x")),
+                            ),
+                        ),
+                    ),
+                    issue_duration=1,
+                    completion_latency=1,
+                ),
+            ),
+        ),
+    )
+    schedule = export_warpgroup_schedule(problem, solve_warpgroup_problem(problem))
+
+    verify_warpgroup_schedule(problem, schedule)
+    assert schedule.lanes[0].operations == ("a", "x", "b")
+    assert SynchronizationEdge("x", "b", 0) in schedule.sync
+    assert SynchronizationEdge("a", "b", 0) not in schedule.sync
+
+
 def test_lsy_reference_documents_and_complete_workflow_are_one_smoke_test() -> None:
     program = warpgroup_program_from_json(_document("lsy-schedule-input.json"))
     reference_problem = warpgroup_problem_from_json(_document("warpgroup-closed-problem.json"))
@@ -1098,8 +1527,17 @@ def test_lsy_reference_documents_and_complete_workflow_are_one_smoke_test() -> N
     problem = build_warpgroup_problem(program, _library(program))
     result = schedule_warpgroups(program, _library(program))
     schedule = result.schedule
+    reference_signatures = tuple(
+        sorted(
+            {operation_signature(program, operation) for operation in program.loop.ops},
+            key=lambda item: item.canonical_key,
+        )
+    )
+    coverage = b200_warpgroup_coverage_matrix(reference_signatures)
 
     verify_warpgroup_schedule(problem, schedule)
+    assert {item.family for item in coverage.entries} == set(B200OperationFamily)
+    assert all(item.status is CalibrationStatus.MISSING for item in coverage.entries)
     assert warpgroup_program_from_json(warpgroup_program_to_json(program)) == program
     assert warpgroup_problem_from_json(warpgroup_problem_to_json(problem)) == problem
     assert warpgroup_schedule_from_json(warpgroup_schedule_to_json(schedule)) == schedule

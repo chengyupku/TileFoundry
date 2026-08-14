@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from typing import Literal
 
 from .errors import WarpgroupVerificationError
 from .expression import value_references
 from .model import (
+    PROBLEM_FORMAT,
+    PROBLEM_FORMAT_V2,
+    PROBLEM_FORMAT_V3,
+    SCHEDULE_FORMAT,
+    SCHEDULE_FORMAT_V2,
+    SCHEDULE_FORMAT_V3,
     MemorySpace,
     SynchronizationEdge,
     TimedOperation,
@@ -16,6 +23,9 @@ from .model import (
 
 type _Instance = tuple[int, str]
 type _ExpandedEdge = tuple[_Instance, _Instance]
+type _EventPhase = Literal["start", "issue_end", "completion"]
+type _Event = tuple[int, str, _EventPhase]
+type _EventEdge = tuple[_Event, _Event]
 
 
 def _fail(message: str) -> None:
@@ -45,21 +55,15 @@ def _semantic_tables(
     )
 
 
-def _required_shared_relations(
+def _required_completion_relations(
     problem: WarpgroupProblem,
 ) -> tuple[SynchronizationEdge, ...]:
     owner, spaces, users = _semantic_tables(problem)
     relations: set[SynchronizationEdge] = set()
-    iter_args = {item.id for item in problem.loop.iter_args}
-    for operation in problem.loop.ops:
-        for output in operation.outputs:
-            for value_id in value_references(output.expression):
-                if value_id not in owner or spaces[value_id] is not MemorySpace.SHARED:
-                    continue
-                distance = 1 if value_id in iter_args else 0
-                if owner[value_id] != operation.id or distance:
-                    relations.add(SynchronizationEdge(owner[value_id], operation.id, distance))
-
+    relations.update(
+        SynchronizationEdge(item.after, item.before, item.distance)
+        for item in problem.dependencies()
+    )
     for operation in problem.loop.ops:
         for output in operation.outputs:
             if spaces[output.id] is not MemorySpace.SHARED:
@@ -118,15 +122,39 @@ def _control_edges(schedule: WarpgroupSchedule, iterations: int) -> set[_Expande
     return edges
 
 
-def _reachable(edges: set[_ExpandedEdge], source: _Instance, target: _Instance) -> bool:
-    successors: dict[_Instance, set[_Instance]] = defaultdict(set)
+def _completion_event_edges(
+    problem: WarpgroupProblem,
+    schedule: WarpgroupSchedule,
+) -> set[_EventEdge]:
+    edges: set[_EventEdge] = set()
+    for iteration in range(problem.loop.iterations):
+        for operation in problem.loop.ops:
+            start: _Event = (iteration, operation.id, "start")
+            issue_end: _Event = (iteration, operation.id, "issue_end")
+            completion: _Event = (iteration, operation.id, "completion")
+            edges.add((start, issue_end))
+            edges.add((issue_end, completion))
+            if operation.issue_duration == operation.completion_latency:
+                edges.add((completion, issue_end))
+    for after, before in _lane_edges(schedule, problem.loop.iterations):
+        edges.add(((*after, "issue_end"), (*before, "start")))
+    for edge in schedule.sync:
+        for after, before in _expand_relation(edge, problem.loop.iterations):
+            edges.add(((*after, "completion"), (*before, "start")))
+    return edges
+
+
+def _event_reachable(edges: set[_EventEdge], source: _Instance, target: _Instance) -> bool:
+    successors: dict[_Event, set[_Event]] = defaultdict(set)
     for after, before in edges:
         successors[after].add(before)
-    pending = [source]
-    visited = {source}
+    source_event: _Event = (*source, "completion")
+    target_event: _Event = (*target, "start")
+    pending = [source_event]
+    visited = {source_event}
     while pending:
         current = pending.pop()
-        if current == target:
+        if current == target_event:
             return True
         for successor in successors.get(current, ()):
             if successor not in visited:
@@ -161,16 +189,13 @@ def _verify_resources(problem: WarpgroupProblem, times: dict[_Instance, TimedOpe
         changes: dict[int, int] = defaultdict(int)
         for instance, timed in times.items():
             operation = operations[instance[1]]
-            amount = next(
-                (
-                    demand.amount
-                    for demand in operation.resources
-                    if demand.resource_id == resource.id
-                ),
-                0,
-            )
-            changes[timed.start] += amount
-            changes[timed.end] -= amount
+            for window in operation.resource_windows:
+                if window.resource_id != resource.id:
+                    continue
+                start = timed.start + window.start_offset
+                end = start + window.duration
+                changes[start] += window.amount
+                changes[end] -= window.amount
         demand = 0
         for timestamp in sorted(changes):
             demand += changes[timestamp]
@@ -184,6 +209,13 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
         _fail("verification requires an exact WarpgroupProblem")
     if type(schedule) is not WarpgroupSchedule:
         _fail("verification requires an exact WarpgroupSchedule")
+    expected_schedule_format = {
+        PROBLEM_FORMAT: SCHEDULE_FORMAT,
+        PROBLEM_FORMAT_V2: SCHEDULE_FORMAT_V2,
+        PROBLEM_FORMAT_V3: SCHEDULE_FORMAT_V3,
+    }.get(problem.format)
+    if expected_schedule_format is None or schedule.format != expected_schedule_format:
+        _fail(f"problem {problem.format!r} requires schedule {expected_schedule_format!r}")
 
     operation_by_id = {item.id: item for item in problem.loop.ops}
     expected_operations = set(operation_by_id)
@@ -203,6 +235,16 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
         missing = sorted(expected_operations - set(lane_by_operation))
         unknown = sorted(set(lane_by_operation) - expected_operations)
         _fail(f"schedule lane coverage differs: missing={missing!r}, unknown={unknown!r}")
+    if problem.format == PROBLEM_FORMAT_V3:
+        for operation in problem.loop.ops:
+            if operation.warp_group is None:
+                _fail(f"fixed-owner operation {operation.id!r} lacks warp_group")
+            if lane_by_operation[operation.id] != operation.warp_group:
+                _fail(
+                    f"operation {operation.id!r} is scheduled on lane "
+                    f"{lane_by_operation[operation.id]}, expected warp_group "
+                    f"{operation.warp_group}"
+                )
 
     expected_instances = {
         (iteration, operation_id)
@@ -220,13 +262,17 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
             f"missing={missing_instances!r}, extra={extra_instances!r}"
         )
     for instance, timed in times.items():
-        duration = operation_by_id[instance[1]].duration
-        if timed.end - timed.start != duration:
-            _fail(f"timed operation {instance!r} has the wrong duration")
+        operation = operation_by_id[instance[1]]
+        issue_end = timed.issue_end
+        if issue_end - timed.start != operation.issue_duration:
+            _fail(f"timed operation {instance!r} has the wrong duration: issue duration")
+        if timed.completion - timed.start != operation.completion_latency:
+            _fail(f"timed operation {instance!r} has the wrong duration: completion latency")
 
     lane_edges = _lane_edges(schedule, problem.loop.iterations)
     for after, before in lane_edges:
-        if times[after].end > times[before].start:
+        issue_end = times[after].issue_end
+        if issue_end > times[before].start:
             _fail(f"lane order {after!r} -> {before!r} is not respected")
 
     for edge in schedule.sync:
@@ -236,18 +282,10 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
         if not expanded:
             _fail(f"sync edge has no finite instance: {edge!r}")
         for after, before in expanded:
-            if times[after].end > times[before].start:
+            if times[after].completion > times[before].start:
                 _fail(f"sync inequality {after!r} -> {before!r} is not respected")
 
     semantic_edges: set[_ExpandedEdge] = set()
-    for dependency in problem.dependencies():
-        for after, before in _expand_relation(
-            SynchronizationEdge(dependency.after, dependency.before, dependency.distance),
-            problem.loop.iterations,
-        ):
-            semantic_edges.add((after, before))
-            if times[after].end > times[before].start:
-                _fail(f"SSA dependency {after!r} -> {before!r} is not respected")
 
     owner, spaces, users = _semantic_tables(problem)
     for value_id, space in spaces.items():
@@ -260,16 +298,17 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
             _fail(f"register value {value_id!r} crosses warpgroup lanes")
 
     control_edges = _control_edges(schedule, problem.loop.iterations)
-    for relation in _required_shared_relations(problem):
+    completion_edges = _completion_event_edges(problem, schedule)
+    for relation in _required_completion_relations(problem):
         for after, before in _expand_relation(relation, problem.loop.iterations):
             semantic_edges.add((after, before))
-            if times[after].end > times[before].start:
-                _fail(f"shared relation {after!r} -> {before!r} is not respected")
-            if not _reachable(control_edges, after, before):
-                _fail(f"shared relation {after!r} -> {before!r} has no lane/sync path")
+            if times[after].completion > times[before].start:
+                _fail(f"completion relation {after!r} -> {before!r} is not respected")
+            if not _event_reachable(completion_edges, after, before):
+                _fail(f"completion relation {after!r} -> {before!r} has no lane/sync path")
     for after, before in _carried_shared_lifetime_edges(problem):
         semantic_edges.add((after, before))
-        if times[after].end > times[before].start:
+        if times[after].completion > times[before].start:
             _fail(f"carried shared lifetime {after!r} -> {before!r} is not respected")
 
     _verify_resources(problem, times)

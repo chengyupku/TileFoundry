@@ -733,22 +733,23 @@ synchronization reachability, shared-allocation reuse, and acyclicity.
 
 ### 6.1 `WarpgroupProgram`
 
-The authored document has format `tilefoundry.warpgroup_program.v1` and exactly
-these top-level fields:
+The authored document has format `tilefoundry.warpgroup_program.v1` or
+`tilefoundry.warpgroup_program.v2` and exactly these top-level fields:
 
 | Field | Meaning |
 | --- | --- |
 | `format` | Selects this program grammar. |
-| `warp_groups` | Gives the positive number of anonymous scheduling lanes available later. |
+| `warp_groups` | Gives the positive number of warp groups. In v1 these are anonymous lanes; in v2 they are ownership indices. |
 | `types` | Maps type IDs to `shape`, `dtype`, and `space`. |
 | `inputs` | Declares SSA values defined outside the loop body. |
 | `loop` | Gives one explicit finite loop. |
 
 The program MUST NOT contain time units, durations, resource capacities,
-operation resource demands, lane assignments, synchronization, an objective,
-phases, implementations, target roles, warp IDs, tile IDs, barrier data, or an
-explicit dependency field. Neither `inputs` order nor `loop.ops` order has
-scheduling meaning.
+operation resource demands, synchronization, an objective, phases,
+implementations, target roles, warp IDs, tile IDs, barrier data, or an explicit
+dependency field. Program v1 has no lane assignment; program v2 has only the
+per-operation `warp_group` ownership field defined below. Neither `inputs`
+order nor `loop.ops` order has scheduling meaning.
 
 A loop has exactly `index`, `iterations`, `iter_args`, and `ops`.
 `iterations` is positive. The index is an implicit integer scalar and is not a
@@ -758,7 +759,9 @@ type, and the yielded value becomes the iter arg in the next iteration. `init`
 is either an external SSA value of exactly that type or a scalar literal
 broadcast to the yielded tensor shape.
 
-An authored operation has exactly `id` and `outputs`. Each output has exactly
+An authored operation in program v1 has exactly `id` and `outputs`. Program v2
+adds exactly one field, `warp_group`, which is a non-negative integer smaller
+than the program's `warp_groups`. Each output has exactly
 `id`, `type`, and `expr`. Multiple outputs of one operation are atomic at this
 boundary. IDs, input SSA definitions, iter args, and output SSA definitions are
 unique across their applicable namespaces. Every use and yield MUST resolve
@@ -809,25 +812,57 @@ explicit `copy` output whose def-use may cross lanes.
 
 ### 6.3 `WarpgroupProblem`
 
-The closed document has format `tilefoundry.warpgroup_problem.v1` and exactly
-these top-level fields:
+Closed documents use `tilefoundry.warpgroup_problem.v1`,
+`tilefoundry.warpgroup_problem.v2`, or `tilefoundry.warpgroup_problem.v3`. All
+versions have exactly these top-level
+fields:
 
 | Field | Meaning |
 | --- | --- |
 | `format` | Selects this problem grammar. |
-| `time_unit` | Gives one ASCII identifier for every duration and timestamp. |
+| `time_unit` | Gives one ASCII identifier for every timing value and timestamp. |
 | `warp_groups` | Carries the authored positive lane bound. |
 | `resources` | Maps temporal-resource IDs to positive integer capacities. |
 | `types` | Carries the validated semantic type table. |
 | `inputs` | Carries the validated external SSA definitions. |
 | `loop` | Carries the same finite loop with closed operation costs. |
 
-Each problem operation has exactly `id`, `outputs`, `duration`, and
-`resources`. Duration and every resource demand are positive integers. A demand
-names one declared capacity and MUST NOT exceed it. The problem contains all
-numeric facts consumed by a finite solver, but no callback, Target, CUDA value,
-profile store, implementation catalog, OR-Tools object, objective field,
-explicit dependency field, lane, synchronization, or hardware role.
+Version 1 retains its synchronous meaning. Each operation has exactly `id`,
+`outputs`, `duration`, and `resources`; every value is a positive integer. It
+normalizes to `issue_duration == completion_latency == duration`, and each
+resource demand normalizes to one window with `start_offset = 0` and window
+`duration` equal to the operation duration. Encoding version 1 MUST reject an
+asynchronous operation or a different resource window rather than lose it.
+
+Version 2 replaces the two legacy cost fields with exactly
+`issue_duration`, `completion_latency`, and `resource_windows` alongside `id`
+and `outputs`. Both timing values are positive integers and
+`completion_latency >= issue_duration`. Equality represents a synchronous
+operation. No asynchronous boolean, operation role, instruction class, or
+hardware-specific operation tag is present.
+
+Version 3 has the version-2 timing fields and adds exactly one required
+`warp_group` field to every operation. It is a non-negative integer less than
+`warp_groups`; it is the operation's fixed execution owner. Build copies this
+value from program v2 without interpretation. A v3 solver searches only
+lane-local order and timing inside each declared group, and a v3 schedule keeps
+lane index `i` equal to input group `i`, including empty groups. Legacy versions
+retain anonymous placement search and do not accept an ownership field.
+
+Each resource window has exactly `resource_id`, positive integer `amount`,
+non-negative integer `start_offset`, and positive integer `duration`. It owns
+the half-open interval
+`[operation.start + start_offset, operation.start + start_offset + duration)`.
+The interval MUST end no later than `operation.start + completion_latency`,
+name one declared capacity, and not exceed that capacity. Multiple explicit
+windows may name the same resource. Resource use MUST NOT be inferred from an
+operation kind, instruction name, workload role, or profiling field.
+
+The problem contains all numeric facts consumed by a finite solver, but no
+callback, Target, CUDA value, profile store, implementation catalog, OR-Tools
+object, objective field, explicit dependency field, searched lane assignment,
+synchronization, or hardware role. Version 3 may carry the fixed per-operation
+`warp_group` ownership described above; it is input data, not a solver variable.
 
 Program-to-problem cost closure is a separate operation. Constructing or
 decoding either document performs only the static type, SSA, loop, storage, and
@@ -839,8 +874,11 @@ synchronization relation, or choose operation times.
 `build_warpgroup_problem(program, cost_library)` is the sole program-to-problem
 closure. The library declares one ASCII `time_unit`, immutable positive integer
 resource capacities, and an exact lookup from `OperationSignature` to one
-positive integer duration plus immutable positive integer resource demands.
-There is no default, estimated, nearest, or fallback cost.
+positive integer issue duration, one positive integer completion latency, and
+immutable explicit resource windows. There is no default, estimated, nearest,
+or fallback cost. Legacy synchronous costs normalize according to the version-1
+rule above; asynchronous costs or non-legacy windows require a version-2 or
+version-3 problem.
 
 An `OperationSignature` has exactly these semantic fields:
 
@@ -861,39 +899,71 @@ dtype, memory space, operand aliasing relation, or output set MUST affect it.
 One build queries each distinct signature once. Missing exact signatures are
 collected and reported together, while an ambiguous exact entry fails
 immediately. Either every operation closes or no `WarpgroupProblem` is returned.
-On success, the builder copies all durations, demands, capacities, and the time
-unit into the existing immutable problem records. The returned problem retains
-no library, callback, Target, CUDA value, profile store, standalone costmodel
+On success, the builder copies all timing values, windows, capacities, and the
+time unit into immutable problem records. The returned problem retains no
+library, callback, Target, CUDA value, profile store, standalone costmodel
 object, or unresolved signature.
+
+TileProf cycle measurements used for closure MUST be finite and positive.
+Conversion to the integer problem grid uses `ceil`; truncation and nearest
+rounding are forbidden. Each original absolute timing field is rounded
+independently before derived differences are checked; it MUST NOT be recreated
+by first splitting, subtracting, or adding other timing fields. A caller MUST
+explicitly select the primary statistic; there is no default p50 or p90.
+Sensitivity uses a separate closed problem and separate solve for each
+statistic, never mixed statistics within one problem. Mapping an external
+artifact to resource windows is a separate explicit, versioned target contract.
+A missing timing, quantization, statistic, or resource mapping fails closure.
 
 ### 6.5 `WarpgroupSchedule`
 
-A successful document has format `tilefoundry.warpgroup_schedule.v1` and
-exactly four top-level fields: `format`, `lanes`, `sync`, and `times`.
+A successful document has format `tilefoundry.warpgroup_schedule.v1`,
+`tilefoundry.warpgroup_schedule.v2`, or `tilefoundry.warpgroup_schedule.v3`.
+All versions have exactly four top-level fields: `format`, `lanes`, `sync`, and
+`times`.
 
-`lanes` is an array of ordered operation-ID arrays, one per anonymous
-warpgroup. `sync` contains unique records with exactly `after`, `before`, and a
+`lanes` is an array of ordered operation-ID arrays, one per warpgroup. In v1/v2
+the lanes are anonymous solver output; in v3 lane index `i` is the fixed input
+ownership group `i`, and empty groups remain present. `sync` contains unique
+records with exactly `after`, `before`, and a
 non-negative loop `distance`. A record states completion-to-start ordering:
-`end(i, after) <= start(i + distance, before)` whenever the destination
-iteration is in range. A distance-zero self edge is invalid.
+`completion(i, after) <= start(i + distance, before)` whenever the destination
+iteration is in range. For version 1, `completion` is its legacy `end` value. A
+distance-zero self edge is invalid.
 
-Each `times` row is exactly `[iteration, operation_id, start, end]`. Iteration
-and start are non-negative integers and `end` is greater than `start`.
-Duplicate timed instances are invalid. The row does not repeat a lane, and the
-document does not repeat a derived makespan or add status, proof, barriers,
-phases, implementations, hardware roles, or profile provenance.
+Each version-1 `times` row remains exactly
+`[iteration, operation_id, start, end]` and normalizes to equal issue end and
+completion. Each version-2 and version-3 row is exactly
+`[iteration, operation_id, start, issue_end, completion]`. Iteration and start
+are non-negative integers, issue end is `start + issue_duration`, and
+completion is `start + completion_latency`. Duplicate timed instances are
+invalid. A row does not repeat a lane, and the document does not repeat a
+derived makespan or add status, proof, barriers, phases, implementations,
+hardware roles, or profile provenance.
+
+The finite solver uses `[start, issue_end)` for lane `NoOverlap` and for the
+fixed body order within and across loop iterations. SSA, loop-carried, shared
+lifetime, and explicit synchronization relations use producer completion.
+Each declared resource window is placed at its explicit offset and checked
+against its declared capacity. The objective is the maximum completion over
+all finite operation instances. Consequently, independent asynchronous
+operations may issue consecutively on one lane while their completion ranges
+overlap.
 
 The schedule decoder and model reject malformed IDs, repeated operations across
 lanes, duplicate synchronization edges or timed instances, distance-zero self
 edges, and non-positive intervals. Constraints that require the closed problem,
-including operation coverage, duration, dependency and lane locality,
+including operation coverage, issue/completion timing, dependency and lane locality,
 synchronization reachability, resource feasibility, shared-allocation reuse,
 and acyclicity, belong to the independent schedule verifier.
 
 `export_warpgroup_schedule(problem, result)` is the sole finite-result export.
 It copies the solved lanes and times, derives synchronization candidates only
-for cross-lane shared def-use, loop-carried shared handoff, and next-iteration
-shared-allocation reuse, and emits no register or same-lane ordering edge.
+for completion-to-start semantic relations: SSA def-use, loop-carried
+dependencies, and shared handoff or uniformly expressible allocation reuse. It
+omits a relation only when the finite completion-capable
+lane/synchronization path already proves that relation; register and same-lane
+relations are not special cases.
 For a loop-carried shared iter arg, the external `init` is ready at the loop
 boundary: its users in iteration zero need not precede or follow that
 iteration's body definition. In every iteration `i >= 1`, all users of the
@@ -902,25 +972,36 @@ allocation is redefined in iteration `i`; the normal yielded-definition to
 next-iteration-user SSA relation also remains in force. Because the compact
 sync record applies uniformly to every in-range iteration, the conditional
 `i >= 1` overwrite relation is a problem-aware finite semantic edge rather
-than a new sync-record variant.
+than a synchronization candidate or a new sync-record variant.
 Lane adjacency and the last-to-first edge between consecutive iterations are
 implicit control edges. A synchronization candidate may be removed only when
 every one of its finite expanded instances remains reachable through those lane
 edges and the other emitted synchronization records. The candidate being
 removed, an unexported solver order, or an unexported cross-lane SSA edge MUST
-NOT be used to prove that candidate redundant.
+NOT be used to prove that candidate redundant. Completion reachability uses an
+event graph with `start -> issue_end`, `issue_end -> completion`, lane
+`issue_end -> next start`, and synchronization
+`completion -> destination start` edges. A synchronous operation also has the
+reverse `completion -> issue_end` equality edge. An asynchronous operation has
+no such reverse edge, but its `start -> issue_end` path may still propagate an
+already-established upstream completion fact to the next lane operation.
 
 `verify_warpgroup_schedule(problem, schedule)` is independent of the solver and
 MUST NOT import or invoke OR-Tools. It checks exact operation and finite-instance
-coverage, declared durations, fixed lane order within and across iterations,
-register locality, SSA and shared completion-before-start, cross-lane shared
-reachability through lane and synchronization edges, shared-allocation reuse,
+coverage, declared issue durations and completion latencies, fixed lane issue
+order within and across iterations,
+register locality, all SSA and shared completion-before-start relations,
+completion reachability through lane and synchronization edges, shared-allocation reuse,
 synchronization inequalities, resource capacities, and acyclicity of the finite
 lane, synchronization, and semantic graph. This includes the conditional
 carried-shared overwrite edge for each iteration `i >= 1`, without imposing it
 on the boundary-ready iteration-zero init. Verification does not reconstruct a
 schedule, trust times as the control relation, or accept an unknown operation,
 extra time row, duplicate instance, or out-of-range iteration.
+
+The verifier pairs versions exactly: problem v1 with schedule v1, problem v2
+with schedule v2, and problem v3 with schedule v3. Every other combination is
+invalid; no decoder or verifier path silently migrates a schedule format.
 
 ### 6.6 End-to-end workflow
 
@@ -934,7 +1015,7 @@ partial schedule is returned after an error.
 
 The immutable `WarpgroupScheduleResult` contains the existing solve status, the
 verified `WarpgroupSchedule`, and a makespan derived from the maximum schedule
-end time. It retains no library, callback, Target, CUDA value, profile store,
+completion time. It retains no library, callback, Target, CUDA value, profile store,
 OR-Tools model, or solver object. Importing the typed or combined boundary does
 not load OR-Tools; only an actual solve crosses that lazy backend boundary.
 
@@ -960,5 +1041,35 @@ The command uses the strict program/problem codecs and the combined workflow.
 With `--json`, output is the unchanged canonical four-field schedule document.
 Text output is a deterministic view of the same typed result: lane number and
 body order, every iteration interval, synchronization edges, status, and the
-derived makespan. Text rendering does not recompute timing or create another
-schedule model. Existing HIR scheduling is not adapted to this boundary.
+derived makespan. A synchronous interval renders with one end; an asynchronous
+interval renders issue end and completion separately. Text rendering does not
+recompute timing or create another schedule model. Existing HIR scheduling is
+not adapted to this boundary.
+
+### 6.7 B200 calibration coverage
+
+B200 calibration coverage is a separate target module over exact
+`OperationSignature` values. Each immutable row contains only its generic
+operation family, canonical signature, implementation ID, implementation
+conditions, resource demands, and one of `missing`, `provider_ready`, or
+`measured`. The families are global-to-shared copy, shared-to-shared compute,
+register/shared local compute, shared/shared remote compute, fused reduction
+and elementwise compute, register rescale, and register-to-shared publication.
+They are classified from expression trees, shape, dtype, and memory spaces,
+never from operation IDs, SSA names, or workload roles.
+
+`provider_ready` means only that a correctness-checked benchmark can be
+materialized for that exact signature. It is not a duration and MUST NOT
+satisfy `CostLibrary.lookup`. Only a retained measured profile may advance an
+exact row to `measured`; a nearby signature remains missing. Hardware,
+environment, source hash, compiler options, statistics, and measurement IDs
+belong to the profile artifact and MUST NOT enter `WarpgroupProblem`.
+
+The initial executable slice is one contiguous 64 by 64 BF16
+global-to-shared copy on B200. Its latency benchmark forms a device dependency
+chain; a separate post-timing kernel copies the shared result to an output
+buffer for complete correctness validation. Compilation, allocation,
+initialization, argument setup, first use, warmup, reset, validation, and output
+transfer remain outside CUDA event intervals. A missing CUDA dependency,
+non-B200 device, failed compilation, unstable sample, incorrect output, or
+profile-store failure produces no frozen artifact and no fallback cost.

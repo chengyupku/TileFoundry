@@ -16,6 +16,7 @@ from .errors import (
 )
 from .expression import value_references
 from .model import (
+    PROBLEM_FORMAT_V3,
     MemorySpace,
     TimedOperation,
     WarpgroupLane,
@@ -48,7 +49,7 @@ class WarpgroupSolveResult:
     @property
     def makespan(self) -> int:
         """Derive the finite makespan from the timing witness."""
-        return max((item.end for item in self.times), default=0)
+        return max((item.completion for item in self.times), default=0)
 
 
 def _value_owners(
@@ -144,14 +145,21 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
         raise WarpgroupValidationError("timeout_seconds must be positive")
     operations = tuple(sorted(problem.loop.ops, key=lambda item: item.id))
     operation_ids = tuple(operation.id for operation in operations)
-    total_work = sum(operation.duration for operation in operations) * problem.loop.iterations
+    operation_by_id = {operation.id: operation for operation in operations}
+    total_work = (
+        sum(operation.completion_latency for operation in operations) * problem.loop.iterations
+    )
     horizon = max(total_work, 1)
     model = cp_model.CpModel()
-    lane_vars = {
-        operation_id: model.NewIntVar(0, problem.warp_groups - 1, f"lane_{operation_id}")
-        for operation_id in operation_ids
-    }
+    fixed_ownership = problem.format == PROBLEM_FORMAT_V3
+    lane_vars: dict[str, Any] = {}
+    if not fixed_ownership:
+        lane_vars = {
+            operation_id: model.NewIntVar(0, problem.warp_groups - 1, f"lane_{operation_id}")
+            for operation_id in operation_ids
+        }
     starts: dict[tuple[int, str], Any] = {}
+    issue_ends: dict[tuple[int, str], Any] = {}
     ends: dict[tuple[int, str], Any] = {}
     lane_presence: dict[tuple[str, int], Any] = {}
     intervals_by_lane: dict[int, list[Any]] = {lane: [] for lane in range(problem.warp_groups)}
@@ -160,48 +168,84 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
     }
     demands_by_resource: dict[str, list[int]] = {resource.id: [] for resource in problem.resources}
     for operation_id in operation_ids:
-        presences = []
-        for lane in range(problem.warp_groups):
-            presence = model.NewBoolVar(f"placed_{operation_id}_{lane}")
-            model.Add(lane_vars[operation_id] == lane).OnlyEnforceIf(presence)
-            lane_presence[(operation_id, lane)] = presence
-            presences.append(presence)
-        model.AddExactlyOne(presences)
+        if fixed_ownership:
+            operation = operation_by_id[operation_id]
+            if operation.warp_group is None:
+                raise WarpgroupModelError("fixed-owner problem operation lacks warp_group")
+            if operation.warp_group >= problem.warp_groups:
+                raise WarpgroupModelError("fixed-owner operation warp_group is out of range")
+        else:
+            presences = []
+            for lane in range(problem.warp_groups):
+                presence = model.NewBoolVar(f"placed_{operation_id}_{lane}")
+                model.Add(lane_vars[operation_id] == lane).OnlyEnforceIf(presence)
+                lane_presence[(operation_id, lane)] = presence
+                presences.append(presence)
+            model.AddExactlyOne(presences)
     for iteration in range(problem.loop.iterations):
         for operation in operations:
             key = (iteration, operation.id)
             start = model.NewIntVar(
-                0, horizon - operation.duration, f"start_{iteration}_{operation.id}"
+                0,
+                horizon - operation.completion_latency,
+                f"start_{iteration}_{operation.id}",
             )
-            end = model.NewIntVar(operation.duration, horizon, f"end_{iteration}_{operation.id}")
-            model.Add(end == start + operation.duration)
+            issue_end = model.NewIntVar(
+                operation.issue_duration,
+                horizon,
+                f"issue_end_{iteration}_{operation.id}",
+            )
+            end = model.NewIntVar(
+                operation.completion_latency,
+                horizon,
+                f"completion_{iteration}_{operation.id}",
+            )
+            model.Add(issue_end == start + operation.issue_duration)
+            model.Add(end == start + operation.completion_latency)
             starts[key] = start
+            issue_ends[key] = issue_end
             ends[key] = end
-            for lane in range(problem.warp_groups):
-                intervals_by_lane[lane].append(
-                    model.NewOptionalIntervalVar(
+            if fixed_ownership:
+                if operation.warp_group is None:
+                    raise WarpgroupModelError("fixed-owner problem operation lacks warp_group")
+                intervals_by_lane[operation.warp_group].append(
+                    model.NewIntervalVar(
                         start,
-                        operation.duration,
-                        end,
-                        lane_presence[(operation.id, lane)],
-                        f"lane_interval_{iteration}_{operation.id}_{lane}",
+                        operation.issue_duration,
+                        issue_end,
+                        f"lane_interval_{iteration}_{operation.id}_{operation.warp_group}",
                     )
                 )
-            for demand in operation.resources:
+            else:
+                for lane in range(problem.warp_groups):
+                    intervals_by_lane[lane].append(
+                        model.NewOptionalIntervalVar(
+                            start,
+                            operation.issue_duration,
+                            issue_end,
+                            lane_presence[(operation.id, lane)],
+                            f"lane_interval_{iteration}_{operation.id}_{lane}",
+                        )
+                    )
+            for window_index, window in enumerate(operation.resource_windows):
+                window_start = start + window.start_offset
+                window_end = window_start + window.duration
                 interval = model.NewIntervalVar(
-                    start,
-                    operation.duration,
-                    end,
-                    f"interval_{iteration}_{operation.id}_{demand.resource_id}",
+                    window_start,
+                    window.duration,
+                    window_end,
+                    f"interval_{iteration}_{operation.id}_{window.resource_id}_{window_index}",
                 )
-                intervals_by_resource[demand.resource_id].append(interval)
-                demands_by_resource[demand.resource_id].append(demand.amount)
+                intervals_by_resource[window.resource_id].append(interval)
+                demands_by_resource[window.resource_id].append(window.amount)
 
     # Each operation occupies its selected lane once per iteration.  This also
     # orders a lane containing only one loop-body operation across iterations.
     for operation_id in operation_ids:
         for iteration in range(problem.loop.iterations - 1):
-            model.Add(ends[(iteration, operation_id)] <= starts[(iteration + 1, operation_id)])
+            model.Add(
+                issue_ends[(iteration, operation_id)] <= starts[(iteration + 1, operation_id)]
+            )
 
     for lane in range(problem.warp_groups):
         model.AddNoOverlap(intervals_by_lane[lane])
@@ -215,28 +259,43 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
 
     for index, first_id in enumerate(operation_ids):
         for second_id in operation_ids[index + 1 :]:
-            same_lane = model.NewBoolVar(f"same_lane_{first_id}_{second_id}")
-            first_before = model.NewBoolVar(f"order_{first_id}_{second_id}")
-            second_before = model.NewBoolVar(f"order_{second_id}_{first_id}")
-            model.Add(lane_vars[first_id] == lane_vars[second_id]).OnlyEnforceIf(same_lane)
-            model.Add(lane_vars[first_id] != lane_vars[second_id]).OnlyEnforceIf(same_lane.Not())
-            model.Add(first_before + second_before == 1).OnlyEnforceIf(same_lane)
-            model.Add(first_before == 0).OnlyEnforceIf(same_lane.Not())
-            model.Add(second_before == 0).OnlyEnforceIf(same_lane.Not())
+            if fixed_ownership:
+                first = operation_by_id[first_id]
+                second = operation_by_id[second_id]
+                if first.warp_group != second.warp_group:
+                    continue
+                first_before = model.NewBoolVar(f"order_{first_id}_{second_id}")
+                second_before = model.NewBoolVar(f"order_{second_id}_{first_id}")
+                model.Add(first_before + second_before == 1)
+                first_condition: tuple[Any, ...] = (first_before,)
+                second_condition: tuple[Any, ...] = (second_before,)
+            else:
+                same_lane = model.NewBoolVar(f"same_lane_{first_id}_{second_id}")
+                first_before = model.NewBoolVar(f"order_{first_id}_{second_id}")
+                second_before = model.NewBoolVar(f"order_{second_id}_{first_id}")
+                model.Add(lane_vars[first_id] == lane_vars[second_id]).OnlyEnforceIf(same_lane)
+                model.Add(lane_vars[first_id] != lane_vars[second_id]).OnlyEnforceIf(
+                    same_lane.Not()
+                )
+                model.Add(first_before + second_before == 1).OnlyEnforceIf(same_lane)
+                model.Add(first_before == 0).OnlyEnforceIf(same_lane.Not())
+                model.Add(second_before == 0).OnlyEnforceIf(same_lane.Not())
+                first_condition = (same_lane, first_before)
+                second_condition = (same_lane, second_before)
             for iteration in range(problem.loop.iterations):
                 model.Add(
-                    ends[(iteration, first_id)] <= starts[(iteration, second_id)]
-                ).OnlyEnforceIf((same_lane, first_before))
+                    issue_ends[(iteration, first_id)] <= starts[(iteration, second_id)]
+                ).OnlyEnforceIf(first_condition)
                 model.Add(
-                    ends[(iteration, second_id)] <= starts[(iteration, first_id)]
-                ).OnlyEnforceIf((same_lane, second_before))
+                    issue_ends[(iteration, second_id)] <= starts[(iteration, first_id)]
+                ).OnlyEnforceIf(second_condition)
                 if iteration + 1 < problem.loop.iterations:
                     model.Add(
-                        ends[(iteration, second_id)] <= starts[(iteration + 1, first_id)]
-                    ).OnlyEnforceIf((same_lane, first_before))
+                        issue_ends[(iteration, second_id)] <= starts[(iteration + 1, first_id)]
+                    ).OnlyEnforceIf(first_condition)
                     model.Add(
-                        ends[(iteration, first_id)] <= starts[(iteration + 1, second_id)]
-                    ).OnlyEnforceIf((same_lane, second_before))
+                        issue_ends[(iteration, first_id)] <= starts[(iteration + 1, second_id)]
+                    ).OnlyEnforceIf(second_condition)
 
     for dependency in problem.dependencies():
         for iteration in range(problem.loop.iterations - dependency.distance):
@@ -244,7 +303,22 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
                 ends[(iteration, dependency.after)]
                 <= starts[(iteration + dependency.distance, dependency.before)]
             )
-    _register_locality_constraints(model, problem, lane_vars)
+    if fixed_ownership:
+        owner, spaces = _value_owners(problem)
+        users = _users(problem)
+        for value_id, space in spaces.items():
+            if space is not MemorySpace.REGISTER:
+                continue
+            component = set(users.get(value_id, ()))
+            if value_id in owner:
+                component.add(owner[value_id])
+            owner_groups = {operation_by_id[operation_id].warp_group for operation_id in component}
+            if len(owner_groups) > 1:
+                raise WarpgroupInfeasibleError(
+                    f"register value {value_id!r} crosses fixed warp groups"
+                )
+    else:
+        _register_locality_constraints(model, problem, lane_vars)
     _shared_lifetime_constraints(model, problem, starts, ends)
     makespan = model.NewIntVar(0, horizon, "makespan")
     model.AddMaxEquality(makespan, tuple(ends.values()))
@@ -267,22 +341,40 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
         raise WarpgroupModelError(f"unexpected warpgroup solver status {status}")
 
     lane_groups: dict[int, list[str]] = {lane: [] for lane in range(problem.warp_groups)}
-    for operation_id in operation_ids:
-        lane_groups[solver.Value(lane_vars[operation_id])].append(operation_id)
+    if fixed_ownership:
+        for operation in operations:
+            if operation.warp_group is None:
+                raise WarpgroupModelError("fixed-owner problem operation lacks warp_group")
+            lane_groups[operation.warp_group].append(operation.id)
+    else:
+        for operation_id in operation_ids:
+            lane_groups[solver.Value(lane_vars[operation_id])].append(operation_id)
     for group in lane_groups.values():
         group.sort(key=lambda operation_id: (solver.Value(starts[(0, operation_id)]), operation_id))
-    non_empty = sorted(
-        (group for group in lane_groups.values() if group),
-        key=lambda group: min(operation_ids.index(operation_id) for operation_id in group),
-    )
-    groups = non_empty + [[] for _ in range(problem.warp_groups - len(non_empty))]
+    groups: list[list[str]]
+    if fixed_ownership:
+        groups = [lane_groups[lane] for lane in range(problem.warp_groups)]
+    else:
+        groups = sorted(
+            (group for group in lane_groups.values() if group),
+            key=lambda group: min(operation_ids.index(operation_id) for operation_id in group),
+        )
+        groups.extend(
+            [
+                []
+                for _ in range(
+                    problem.warp_groups - sum(bool(group) for group in lane_groups.values())
+                )
+            ]
+        )
     lanes = tuple(WarpgroupLane(tuple(group)) for group in groups)
     times = tuple(
         TimedOperation(
             iteration,
             operation_id,
             solver.Value(starts[(iteration, operation_id)]),
-            solver.Value(ends[(iteration, operation_id)]),
+            issue_end=solver.Value(issue_ends[(iteration, operation_id)]),
+            completion=solver.Value(ends[(iteration, operation_id)]),
         )
         for iteration in range(problem.loop.iterations)
         for operation_id in operation_ids

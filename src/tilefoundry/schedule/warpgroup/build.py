@@ -26,6 +26,9 @@ from .expression import (
 )
 from .model import (
     PROBLEM_FORMAT,
+    PROBLEM_FORMAT_V2,
+    PROBLEM_FORMAT_V3,
+    PROGRAM_FORMAT_V2,
     OperationOutput,
     ProblemLoop,
     ProblemOperation,
@@ -201,16 +204,35 @@ def build_warpgroup_problem(
         ProblemOperation(
             operation.id,
             operation.outputs,
-            costs[operation.id].duration,
-            costs[operation.id].resources,
+            issue_duration=costs[operation.id].issue_duration,
+            completion_latency=costs[operation.id].completion_latency,
+            resource_windows=costs[operation.id].resource_windows,
+            warp_group=operation.warp_group,
         )
         for operation in program.loop.ops
     )
     loop = ProblemLoop(
         program.loop.index, program.loop.iterations, program.loop.iter_args, operations
     )
+    problem_format = (
+        PROBLEM_FORMAT_V3
+        if program.format == PROGRAM_FORMAT_V2
+        else PROBLEM_FORMAT
+        if all(
+            cost.issue_duration == cost.completion_latency
+            and len(cost.resource_windows) == len(cost.resources)
+            and all(
+                window.start_offset == 0 and window.duration == cost.completion_latency
+                for window in cost.resource_windows
+            )
+            and {(window.resource_id, window.amount) for window in cost.resource_windows}
+            == {(demand.resource_id, demand.amount) for demand in cost.resources}
+            for cost in costs.values()
+        )
+        else PROBLEM_FORMAT_V2
+    )
     return WarpgroupProblem(
-        PROBLEM_FORMAT,
+        problem_format,
         cost_library.time_unit,
         program.warp_groups,
         cost_library.resources,

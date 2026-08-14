@@ -28,6 +28,13 @@ from .expression import (
     fold_expression,
 )
 from .model import (
+    PROBLEM_FORMAT,
+    PROBLEM_FORMAT_V2,
+    PROBLEM_FORMAT_V3,
+    PROGRAM_FORMAT,
+    SCHEDULE_FORMAT,
+    SCHEDULE_FORMAT_V2,
+    SCHEDULE_FORMAT_V3,
     DType,
     LoopIterArg,
     MemorySpace,
@@ -39,6 +46,7 @@ from .model import (
     ProgramOperation,
     ResourceCapacity,
     ResourceDemand,
+    ResourceWindow,
     SynchronizationEdge,
     TensorType,
     TimedOperation,
@@ -383,7 +391,7 @@ def _encode_outputs(outputs: tuple[OperationOutput, ...]) -> list[object]:
     return result
 
 
-def _decode_program_loop(value: object) -> ProgramLoop:
+def _decode_program_loop(value: object, *, version: int) -> ProgramLoop:
     data = _object(
         value,
         fields=frozenset({"index", "iterations", "iter_args", "ops"}),
@@ -392,11 +400,15 @@ def _decode_program_loop(value: object) -> ProgramLoop:
     index = _string(data["index"], "loop index")
     operations: list[ProgramOperation] = []
     for raw in _array(data["ops"], "loop ops"):
-        item = _object(raw, fields=frozenset({"id", "outputs"}), label="operation")
+        fields = {"id", "outputs"}
+        if version == 2:
+            fields.add("warp_group")
+        item = _object(raw, fields=frozenset(fields), label="operation")
         operations.append(
             ProgramOperation(
                 _string(item["id"], "operation ID"),
                 _decode_outputs(item["outputs"], index),
+                _integer(item["warp_group"], "operation warp_group") if version == 2 else None,
             )
         )
     return ProgramLoop(
@@ -407,12 +419,17 @@ def _decode_program_loop(value: object) -> ProgramLoop:
     )
 
 
-def _encode_program_loop(loop: ProgramLoop) -> dict[str, object]:
+def _encode_program_loop(loop: ProgramLoop, *, version: int) -> dict[str, object]:
     _exact(loop, ProgramLoop, "program loop")
     operations: list[object] = []
     for item in loop.ops:
         _exact(item, ProgramOperation, "program operation")
-        operations.append({"id": item.id, "outputs": _encode_outputs(item.outputs)})
+        operation: dict[str, object] = {"id": item.id, "outputs": _encode_outputs(item.outputs)}
+        if version == 2:
+            if item.warp_group is None:
+                raise WarpgroupSerializationError("program v2 operation lacks warp_group")
+            operation["warp_group"] = item.warp_group
+        operations.append(operation)
     return {
         "index": loop.index,
         "iterations": loop.iterations,
@@ -451,7 +468,41 @@ def _encode_demands(resources: tuple[ResourceDemand, ...]) -> dict[str, object]:
     return result
 
 
-def _decode_problem_loop(value: object) -> ProblemLoop:
+def _decode_windows(value: object) -> tuple[ResourceWindow, ...]:
+    windows: list[ResourceWindow] = []
+    for raw in _array(value, "resource windows"):
+        item = _object(
+            raw,
+            fields=frozenset({"resource_id", "amount", "start_offset", "duration"}),
+            label="resource window",
+        )
+        windows.append(
+            ResourceWindow(
+                _string(item["resource_id"], "resource window ID"),
+                _integer(item["amount"], "resource window amount"),
+                _integer(item["start_offset"], "resource window start offset"),
+                _integer(item["duration"], "resource window duration"),
+            )
+        )
+    return tuple(windows)
+
+
+def _encode_windows(windows: tuple[ResourceWindow, ...]) -> list[object]:
+    encoded: list[object] = []
+    for item in windows:
+        _exact(item, ResourceWindow, "resource window")
+        encoded.append(
+            {
+                "resource_id": item.resource_id,
+                "amount": item.amount,
+                "start_offset": item.start_offset,
+                "duration": item.duration,
+            }
+        )
+    return encoded
+
+
+def _decode_problem_loop(value: object, *, version: int) -> ProblemLoop:
     data = _object(
         value,
         fields=frozenset({"index", "iterations", "iter_args", "ops"}),
@@ -460,19 +511,47 @@ def _decode_problem_loop(value: object) -> ProblemLoop:
     index = _string(data["index"], "loop index")
     operations: list[ProblemOperation] = []
     for raw in _array(data["ops"], "loop ops"):
-        item = _object(
-            raw,
-            fields=frozenset({"id", "outputs", "duration", "resources"}),
-            label="operation",
-        )
-        operations.append(
-            ProblemOperation(
-                _string(item["id"], "operation ID"),
-                _decode_outputs(item["outputs"], index),
-                _integer(item["duration"], "operation duration"),
-                _decode_demands(item["resources"]),
+        if version == 1:
+            item = _object(
+                raw,
+                fields=frozenset({"id", "outputs", "duration", "resources"}),
+                label="operation",
             )
-        )
+            operations.append(
+                ProblemOperation(
+                    _string(item["id"], "operation ID"),
+                    _decode_outputs(item["outputs"], index),
+                    _integer(item["duration"], "operation duration"),
+                    _decode_demands(item["resources"]),
+                )
+            )
+        else:
+            fields = {
+                "id",
+                "outputs",
+                "issue_duration",
+                "completion_latency",
+                "resource_windows",
+            }
+            if version == 3:
+                fields.add("warp_group")
+            item = _object(
+                raw,
+                fields=frozenset(fields),
+                label="operation",
+            )
+            operations.append(
+                ProblemOperation(
+                    id=_string(item["id"], "operation ID"),
+                    outputs=_decode_outputs(item["outputs"], index),
+                    issue_duration=_integer(item["issue_duration"], "issue duration"),
+                    completion_latency=_integer(item["completion_latency"], "completion latency"),
+                    resource_windows=_decode_windows(item["resource_windows"]),
+                    warp_group=_integer(item["warp_group"], "operation warp_group")
+                    if version == 3
+                    else None,
+                )
+            )
     return ProblemLoop(
         index,
         _integer(data["iterations"], "loop iterations"),
@@ -481,19 +560,33 @@ def _decode_problem_loop(value: object) -> ProblemLoop:
     )
 
 
-def _encode_problem_loop(loop: ProblemLoop) -> dict[str, object]:
+def _encode_problem_loop(loop: ProblemLoop, *, version: int) -> dict[str, object]:
     _exact(loop, ProblemLoop, "problem loop")
     operations: list[object] = []
     for item in loop.ops:
         _exact(item, ProblemOperation, "problem operation")
-        operations.append(
-            {
+        if version == 1:
+            operations.append(
+                {
+                    "id": item.id,
+                    "outputs": _encode_outputs(item.outputs),
+                    "duration": item.duration,
+                    "resources": _encode_demands(item.resources),
+                }
+            )
+        else:
+            operation: dict[str, object] = {
                 "id": item.id,
                 "outputs": _encode_outputs(item.outputs),
-                "duration": item.duration,
-                "resources": _encode_demands(item.resources),
+                "issue_duration": item.issue_duration,
+                "completion_latency": item.completion_latency,
+                "resource_windows": _encode_windows(item.resource_windows),
             }
-        )
+            if version == 3:
+                if item.warp_group is None:
+                    raise WarpgroupSerializationError("problem v3 operation lacks warp_group")
+                operation["warp_group"] = item.warp_group
+            operations.append(operation)
     return {
         "index": loop.index,
         "iterations": loop.iterations,
@@ -515,7 +608,9 @@ def warpgroup_program_from_json(text: str) -> WarpgroupProgram:
             _integer(data["warp_groups"], "warp_groups"),
             _decode_types(data["types"]),
             _decode_inputs(data["inputs"]),
-            _decode_program_loop(data["loop"]),
+            _decode_program_loop(
+                data["loop"], version=1 if data["format"] == PROGRAM_FORMAT else 2
+            ),
         )
     except WarpgroupSerializationError:
         raise
@@ -531,7 +626,9 @@ def warpgroup_program_to_json(program: WarpgroupProgram) -> str:
         "warp_groups": program.warp_groups,
         "types": _encode_types(program.types),
         "inputs": _encode_inputs(program.inputs),
-        "loop": _encode_program_loop(program.loop),
+        "loop": _encode_program_loop(
+            program.loop, version=1 if program.format == PROGRAM_FORMAT else 2
+        ),
     }
     decoded = warpgroup_program_from_json(_canonical(payload))
     if decoded != program:
@@ -549,14 +646,18 @@ def warpgroup_problem_from_json(text: str) -> WarpgroupProblem:
             ),
             label="warpgroup problem",
         )
+        format_value = _string(data["format"], "problem format")
+        if format_value not in (PROBLEM_FORMAT, PROBLEM_FORMAT_V2, PROBLEM_FORMAT_V3):
+            raise WarpgroupSerializationError("unsupported problem format")
+        version = {PROBLEM_FORMAT: 1, PROBLEM_FORMAT_V2: 2, PROBLEM_FORMAT_V3: 3}[format_value]
         return WarpgroupProblem(
-            _string(data["format"], "problem format"),
+            format_value,
             _string(data["time_unit"], "time_unit"),
             _integer(data["warp_groups"], "warp_groups"),
             _decode_resources(data["resources"]),
             _decode_types(data["types"]),
             _decode_inputs(data["inputs"]),
-            _decode_problem_loop(data["loop"]),
+            _decode_problem_loop(data["loop"], version=version),
         )
     except WarpgroupSerializationError:
         raise
@@ -574,7 +675,10 @@ def warpgroup_problem_to_json(problem: WarpgroupProblem) -> str:
         "resources": _encode_resources(problem.resources),
         "types": _encode_types(problem.types),
         "inputs": _encode_inputs(problem.inputs),
-        "loop": _encode_problem_loop(problem.loop),
+        "loop": _encode_problem_loop(
+            problem.loop,
+            version={PROBLEM_FORMAT: 1, PROBLEM_FORMAT_V2: 2, PROBLEM_FORMAT_V3: 3}[problem.format],
+        ),
     }
     decoded = warpgroup_problem_from_json(_canonical(payload))
     if decoded != problem:
@@ -590,6 +694,10 @@ def warpgroup_schedule_from_json(text: str) -> WarpgroupSchedule:
             fields=frozenset({"format", "lanes", "sync", "times"}),
             label="warpgroup schedule",
         )
+        format_value = _string(data["format"], "schedule format")
+        if format_value not in (SCHEDULE_FORMAT, SCHEDULE_FORMAT_V2, SCHEDULE_FORMAT_V3):
+            raise WarpgroupSerializationError("unsupported schedule format")
+        version = 1 if format_value == SCHEDULE_FORMAT else 2
         lanes = tuple(
             WarpgroupLane(tuple(_string(item, "lane operation") for item in _array(raw, "lane")))
             for raw in _array(data["lanes"], "lanes")
@@ -611,19 +719,35 @@ def warpgroup_schedule_from_json(text: str) -> WarpgroupSchedule:
         times: list[TimedOperation] = []
         for raw in _array(data["times"], "times"):
             row = _array(raw, "time row")
-            if len(row) != 4:
-                raise WarpgroupSerializationError("time row must contain exactly four items")
-            times.append(
-                TimedOperation(
-                    _integer(row[0], "time iteration"),
-                    _string(row[1], "timed operation ID"),
-                    _integer(row[2], "time start"),
-                    _integer(row[3], "time end"),
+            if len(row) != (4 if version == 1 else 5):
+                expected = 4 if version == 1 else 5
+                raise WarpgroupSerializationError(f"time row must contain exactly {expected} items")
+            iteration = _integer(row[0], "time iteration")
+            operation_id = _string(row[1], "timed operation ID")
+            start = _integer(row[2], "time start")
+            if version == 1:
+                times.append(
+                    TimedOperation(
+                        iteration,
+                        operation_id,
+                        start,
+                        _integer(row[3], "time end"),
+                    )
                 )
-            )
-        return WarpgroupSchedule(
-            _string(data["format"], "schedule format"), lanes, tuple(sync), tuple(times)
-        )
+            else:
+                issue_end = _integer(row[3], "time issue end")
+                completion = _integer(row[4], "time completion")
+                times.append(
+                    TimedOperation(
+                        iteration,
+                        operation_id,
+                        start,
+                        completion,
+                        issue_end=issue_end,
+                        completion=completion,
+                    )
+                )
+        return WarpgroupSchedule(format_value, lanes, tuple(sync), tuple(times))
     except WarpgroupSerializationError:
         raise
     except WarpgroupValidationError as error:
@@ -644,7 +768,18 @@ def warpgroup_schedule_to_json(schedule: WarpgroupSchedule) -> str:
     times: list[object] = []
     for timed in schedule.times:
         _exact(timed, TimedOperation, "timed operation")
-        times.append([timed.iteration, timed.operation_id, timed.start, timed.end])
+        if schedule.format == SCHEDULE_FORMAT:
+            times.append([timed.iteration, timed.operation_id, timed.start, timed.end])
+        else:
+            times.append(
+                [
+                    timed.iteration,
+                    timed.operation_id,
+                    timed.start,
+                    timed.issue_end,
+                    timed.completion,
+                ]
+            )
     payload = {"format": schedule.format, "lanes": lanes, "sync": sync, "times": times}
     decoded = warpgroup_schedule_from_json(_canonical(payload))
     if decoded != schedule:
