@@ -984,15 +984,24 @@ within a period and the last-to-first wrap inequality
 `issue_end_offset(last) <= start_offset(first) + II`. The finite objective is
 the maximum of every prologue completion and
 `start_offset(op) + (N - 1) * II + completion_latency(op)` for a non-empty
-body; it is not a standalone minimization of `II`. Every declared resource
-window in the finite prologue and requested body prefix participates in the
-solver's capacity constraints, and the independent verifier checks the same
-finite windows. These finite resource constraints use derived interval
-auxiliaries for each requested window instance, so resourceful CP model size is
-not currently claimed to be independent of the prefix length. This does not
-claim an infinite periodic resource-capacity proof: windows crossing an
-unbounded period boundary remain deferred to later periodic resource-boundary
-work.
+body. Minimizing `II` alone is insufficient because it leaves finite prologue
+and body phases unconstrained and can select a larger finite makespan. The
+solver therefore minimizes finite makespan first and `II` second. After fixing
+both values, it deterministically minimizes, in order, the canonical sum of
+prologue starts, the canonical sum of body offsets, and the stable lane-order
+encoding built from sorted operation IDs. Stable model construction, one
+search worker, and a fixed random seed resolve any remaining equivalent
+witnesses. If the tie-break cannot be proven within the solve timeout, the
+result is not reported as optimal.
+
+Every declared resource window in the finite prologue and requested body
+prefix participates in the solver's capacity constraints, and the independent
+verifier checks the same finite windows. These finite resource constraints use
+derived interval auxiliaries for each requested window instance, so resourceful
+CP model size is not currently claimed to be independent of the prefix length.
+This does not claim an infinite periodic resource-capacity proof: windows
+crossing an unbounded period boundary remain deferred to later periodic
+resource-boundary work.
 
 When a v3 prefix contains at least two body instances, the verifier derives
 `II` from iterations one and two and requires the same positive start delta for
@@ -1000,8 +1009,9 @@ all later body pairs. The prologue-to-body delta is intentionally exempt. With
 only one body instance, `II` is not recoverable from the serialized finite
 schedule; lane, dependency, shared-lifetime, synchronization, resource, and
 finite timing checks still apply. The final row currently remains a periodic
-body row with its successor requirement omitted; an independently searched
-peeled epilogue is not part of this boundary.
+body row with its successor requirement omitted. This omitted-final-successor
+prefix is the selected finite boundary semantics; an independently searched
+peeled epilogue is not part of this contract.
 
 The schedule decoder and model reject malformed IDs, repeated operations across
 lanes, duplicate synchronization edges or timed instances, distance-zero self

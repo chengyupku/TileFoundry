@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -180,6 +181,7 @@ def _solve_compact_fixed_owner_model(
     for operation in operations:
         model.Add(initiation_interval >= operation.issue_duration)
 
+    lane_order_terms: list[Any] = []
     for index, first_id in enumerate(operation_ids):
         for second_id in operation_ids[index + 1 :]:
             first = operation_by_id[first_id]
@@ -188,6 +190,7 @@ def _solve_compact_fixed_owner_model(
                 continue
             first_before = model.NewBoolVar(f"order_{first_id}_{second_id}")
             second_before = model.NewBoolVar(f"order_{second_id}_{first_id}")
+            lane_order_terms.append(first_before)
             model.Add(first_before + second_before == 1)
             model.Add(offsets[first_id] + first.issue_duration <= offsets[second_id]).OnlyEnforceIf(
                 first_before
@@ -337,14 +340,20 @@ def _solve_compact_fixed_owner_model(
             for operation in operations
         )
     model.AddMaxEquality(makespan, completion_exprs)
-    model.Minimize(makespan)
 
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = float(timeout_seconds)
-    solver.parameters.num_search_workers = 1
-    solver.parameters.random_seed = 0
-    solver.parameters.cp_model_presolve = True
-    solver.parameters.symmetry_level = 2
+    deadline = time.monotonic() + float(timeout_seconds)
+
+    def new_solver() -> Any:
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = max(deadline - time.monotonic(), 0.001)
+        solver.parameters.num_search_workers = 1
+        solver.parameters.random_seed = 0
+        solver.parameters.cp_model_presolve = True
+        solver.parameters.symmetry_level = 2
+        return solver
+
+    model.Minimize(makespan)
+    solver = new_solver()
     status = solver.Solve(model)
     if status == cp_model.INFEASIBLE:
         raise WarpgroupInfeasibleError("warpgroup problem is infeasible")
@@ -354,6 +363,51 @@ def _solve_compact_fixed_owner_model(
         raise WarpgroupModelError("warpgroup CP-SAT model is invalid")
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         raise WarpgroupModelError(f"unexpected warpgroup solver status {status}")
+
+    final_status = status
+    if status == cp_model.OPTIMAL:
+        best_makespan = solver.Value(makespan)
+        model.Add(makespan == best_makespan)
+        model.ClearObjective()
+        model.Minimize(initiation_interval)
+        ii_solver = new_solver()
+        ii_status = ii_solver.Solve(model)
+        if ii_status == cp_model.UNKNOWN:
+            final_status = cp_model.FEASIBLE
+        elif ii_status == cp_model.INFEASIBLE:
+            raise WarpgroupModelError("warpgroup II tie-break model is infeasible")
+        elif ii_status == cp_model.MODEL_INVALID:
+            raise WarpgroupModelError("warpgroup II tie-break model is invalid")
+        elif ii_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            raise WarpgroupModelError(f"unexpected warpgroup II tie-break status {ii_status}")
+        else:
+            solver = ii_solver
+            final_status = ii_status
+        if ii_status == cp_model.OPTIMAL:
+            model.Add(initiation_interval == solver.Value(initiation_interval))
+            order_weight = len(lane_order_terms) + 1
+            offset_bound = len(operations) * horizon
+            tie_break = (
+                sum(prologue_starts.values())
+                * (offset_bound * order_weight + len(lane_order_terms) + 1)
+                + sum(offsets.values()) * order_weight
+                + sum(lane_order_terms, 0)
+            )
+            model.ClearObjective()
+            model.Minimize(tie_break)
+            tie_solver = new_solver()
+            tie_status = tie_solver.Solve(model)
+            if tie_status == cp_model.UNKNOWN:
+                final_status = cp_model.FEASIBLE
+            elif tie_status == cp_model.INFEASIBLE:
+                raise WarpgroupModelError("warpgroup tie-break model is infeasible")
+            elif tie_status == cp_model.MODEL_INVALID:
+                raise WarpgroupModelError("warpgroup tie-break model is invalid")
+            elif tie_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                raise WarpgroupModelError(f"unexpected warpgroup tie-break status {tie_status}")
+            else:
+                solver = tie_solver
+                final_status = tie_status
 
     lane_groups: dict[int, list[str]] = {lane: [] for lane in range(problem.warp_groups)}
     for operation in operations:
@@ -388,7 +442,7 @@ def _solve_compact_fixed_owner_model(
         for operation in operations
     )
     return WarpgroupSolveResult(
-        "OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE_NOT_PROVEN",
+        "OPTIMAL" if final_status == cp_model.OPTIMAL else "FEASIBLE_NOT_PROVEN",
         lanes,
         tuple(sorted(times)),
     )

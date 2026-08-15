@@ -1358,11 +1358,12 @@ def _periodic_problem() -> WarpgroupProblem:
     )
 
 
-def test_m6_1_fixed_owner_periodic_finite_solve_is_deterministic() -> None:
+def test_m6_1_m6_3_periodic_objective_and_tie_break_are_deterministic() -> None:
     problem = _periodic_problem()
     first = solve_warpgroup_problem(problem)
     second = solve_warpgroup_problem(problem)
     assert first == second
+    assert first.status == "OPTIMAL"
     schedule = export_warpgroup_schedule(problem, first)
     verify_warpgroup_schedule(problem, schedule)
     times = _time_map(first)
@@ -1373,11 +1374,55 @@ def test_m6_1_fixed_owner_periodic_finite_solve_is_deterministic() -> None:
     }
     assert initiation_intervals == {3}
     assert first.makespan == 9
-    assert set(first.lanes[0].operations) == {"a", "b"}
+    assert first.lanes[0].operations == ("b", "a")
     assert first.lanes[1].operations == ("c",)
     assert warpgroup_schedule_to_json(schedule) == warpgroup_schedule_to_json(
         export_warpgroup_schedule(problem, second)
     )
+
+    operations = {item.id: item for item in problem.loop.ops}
+
+    def witness(ii: int, phase: int) -> WarpgroupSchedule:
+        starts = {"a": 1, "b": 0, "c": 0}
+        times = []
+        for iteration in range(problem.loop.iterations):
+            for operation_id in sorted(operations):
+                operation = operations[operation_id]
+                start = (
+                    starts[operation_id]
+                    if iteration == 0
+                    else phase + starts[operation_id] + iteration * ii
+                )
+                times.append(
+                    TimedOperation(
+                        iteration,
+                        operation_id,
+                        start,
+                        issue_end=start + operation.issue_duration,
+                        completion=start + operation.completion_latency,
+                    )
+                )
+        candidate = WarpgroupSchedule(
+            SCHEDULE_FORMAT_V3,
+            (WarpgroupLane(("b", "a")), WarpgroupLane(("c",))),
+            (),
+            tuple(times),
+        )
+        verify_warpgroup_schedule(problem, candidate)
+        return candidate
+
+    smaller_ii = witness(3, 100)
+    larger_ii = witness(4, 0)
+    smaller_times = {(item.iteration, item.operation_id): item for item in smaller_ii.times}
+    larger_times = {(item.iteration, item.operation_id): item for item in larger_ii.times}
+    assert (
+        smaller_times[(2, "c")].start - smaller_times[(1, "c")].start
+        < larger_times[(2, "c")].start - larger_times[(1, "c")].start
+    )
+    assert max(item.completion for item in smaller_ii.times) > max(
+        item.completion for item in larger_ii.times
+    )
+    assert first.makespan == max(item.completion for item in first.times)
 
 
 def test_m6_1_verifier_rejects_one_iteration_period_shift() -> None:
@@ -1434,7 +1479,7 @@ def test_m6_2_compact_model_variable_count_is_iteration_independent(
     assert counts[0] == counts[1]
 
 
-def test_m6_2_compact_two_round_dependency_matches_materialized_witness() -> None:
+def test_m6_2_m6_3_compact_two_round_matches_finite_reference() -> None:
     """A carried SSA edge is solved once and then expanded into two rows."""
     program = _fixed_owner_program()
     problem = build_warpgroup_problem(program, _library(program))
@@ -1455,6 +1500,18 @@ def test_m6_2_compact_two_round_dependency_matches_materialized_witness() -> Non
     assert result.lanes[0].operations == ("load", "advance")
     assert result.lanes[1].operations == ("independent",)
     assert result.lanes[2].operations == ()
+
+    reference = dataclasses.replace(
+        problem,
+        format=PROBLEM_FORMAT_V2,
+        loop=dataclasses.replace(
+            problem.loop,
+            ops=tuple(dataclasses.replace(item, warp_group=None) for item in problem.loop.ops),
+        ),
+    )
+    reference_result = solve_warpgroup_problem(reference)
+    assert reference_result.makespan == result.makespan
+    assert reference_result.lanes == result.lanes
 
 
 def test_m6_2_fixed_owner_resource_windows_are_solved_before_export() -> None:

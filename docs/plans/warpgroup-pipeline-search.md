@@ -793,11 +793,13 @@ produce ordinary v3 rows accepted by the independent verifier.
   capacity constraints through finite derived interval auxiliaries; the
   resourceful model therefore still grows with the requested prefix. An
   infinite period-boundary resource proof remains in step 6.4.
-- [ ] step 6.3 Define the finite makespan objective and deterministic tie-breaks;
-  decide between an independently searched peeled epilogue and the current
-  omitted-final-successor prefix, then prove the selected model against the
-  finite solver's optimal makespan. Prove why minimizing `II` alone is
-  insufficient for fixed finite `N`.
+- [x] step 6.3 Retain the omitted-final-successor prefix rather than adding an
+  independently searched peeled epilogue. Minimize the maximum completion over
+  every prologue and finite body instance, then deterministically minimize `II`,
+  canonical prologue starts, body offsets, and lane order. Prove with accepted
+  counter-witnesses that minimizing `II` alone can retain a worse finite
+  makespan, and compare the selected boundary against the finite reference
+  solver.
 - [ ] step 6.4 Define periodic lane/resource boundary checks, including a
   compact treatment of resource windows that avoids per-prefix auxiliary
   growth, windows crossing the period boundary, and completion sync that cannot
