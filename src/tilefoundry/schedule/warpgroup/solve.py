@@ -135,6 +135,103 @@ def _shared_lifetime_constraints(
                     model.Add(ends[(iteration, user)] <= starts[(iteration, defining_operation)])
 
 
+def _add_compact_periodic_resource_constraints(
+    model: Any,
+    problem: WarpgroupProblem,
+    operations: tuple[ProblemOperation, ...],
+    prologue_starts: dict[str, Any],
+    offsets: dict[str, Any],
+    initiation_interval: Any,
+    horizon: int,
+    ii_lower_bound: int,
+) -> None:
+    """Constrain finite prologue and infinitely repeated body windows."""
+    if not problem.resources:
+        return
+
+    capacities = {resource.id: resource.capacity for resource in problem.resources}
+    copy_bound = math.ceil(horizon / ii_lower_bound)
+    periodic_intervals: dict[str, list[Any]] = {resource.id: [] for resource in problem.resources}
+    periodic_demands: dict[str, list[int]] = {resource.id: [] for resource in problem.resources}
+    boundary_intervals: dict[str, list[Any]] = {resource.id: [] for resource in problem.resources}
+    boundary_demands: dict[str, list[int]] = {resource.id: [] for resource in problem.resources}
+
+    def add_window(
+        intervals: dict[str, list[Any]],
+        demands: dict[str, list[int]],
+        operation: ProblemOperation,
+        window_index: int,
+        start: Any,
+        name: str,
+        *,
+        materialize_start: bool = False,
+    ) -> None:
+        window = operation.resource_windows[window_index]
+        if materialize_start:
+            start_variable = model.NewIntVar(
+                -copy_bound * horizon,
+                (copy_bound + 1) * horizon,
+                f"{name}_start",
+            )
+            model.Add(start_variable == start)
+            start = start_variable
+        intervals[window.resource_id].append(
+            model.NewIntervalVar(start, window.duration, start + window.duration, name)
+        )
+        demands[window.resource_id].append(window.amount)
+
+    for operation in operations:
+        for window_index, window in enumerate(operation.resource_windows):
+            prologue_start = prologue_starts[operation.id] + window.start_offset
+            add_window(
+                boundary_intervals,
+                boundary_demands,
+                operation,
+                window_index,
+                prologue_start,
+                f"prologue_resource_{operation.id}_{window.resource_id}_{window_index}",
+            )
+            if problem.loop.iterations < 2:
+                continue
+
+            base_start = offsets[operation.id] + window.start_offset
+            # Every base window lies in [0, horizon].  Any infinite-period copy
+            # intersecting [0, II) therefore has shift in [-copy_bound, 0].
+            for shift in range(-copy_bound, 1):
+                add_window(
+                    periodic_intervals,
+                    periodic_demands,
+                    operation,
+                    window_index,
+                    base_start + shift * initiation_interval,
+                    f"periodic_resource_{operation.id}_{window.resource_id}_{window_index}_{shift}",
+                    materialize_start=True,
+                )
+
+            # Only these earliest real body copies can intersect a prologue
+            # window, whose end is also bounded by horizon.
+            for iteration in range(1, copy_bound + 1):
+                add_window(
+                    boundary_intervals,
+                    boundary_demands,
+                    operation,
+                    window_index,
+                    base_start + iteration * initiation_interval,
+                    f"boundary_resource_{operation.id}_{window.resource_id}_{window_index}_{iteration}",
+                    materialize_start=True,
+                )
+
+    for resource_id, capacity in capacities.items():
+        if periodic_intervals[resource_id]:
+            model.AddCumulative(
+                periodic_intervals[resource_id], periodic_demands[resource_id], capacity
+            )
+        if boundary_intervals[resource_id]:
+            model.AddCumulative(
+                boundary_intervals[resource_id], boundary_demands[resource_id], capacity
+            )
+
+
 def _solve_compact_fixed_owner_model(
     problem: WarpgroupProblem, timeout_seconds: float
 ) -> WarpgroupSolveResult:
@@ -154,6 +251,7 @@ def _solve_compact_fixed_owner_model(
         sum(operation.issue_duration for operation in operations),
     ) + max(operation.completion_latency for operation in operations)
     horizon = max(static_span, 1)
+    ii_lower_bound = max(operation.issue_duration for operation in operations)
     model = cp_model.CpModel()
     initiation_interval = model.NewIntVar(1, horizon, "II")
     offsets = {
@@ -285,52 +383,20 @@ def _solve_compact_fixed_owner_model(
         if len(groups) > 1:
             raise WarpgroupInfeasibleError(f"register value {value_id!r} crosses fixed warp groups")
 
+    _add_compact_periodic_resource_constraints(
+        model,
+        problem,
+        operations,
+        prologue_starts,
+        offsets,
+        initiation_interval,
+        horizon,
+        ii_lower_bound,
+    )
+
     makespan_upper = horizon * problem.loop.iterations + max(
         operation.completion_latency for operation in operations
     )
-    intervals_by_resource: dict[str, list[Any]] = {
-        resource.id: [] for resource in problem.resources
-    }
-    demands_by_resource: dict[str, list[int]] = {resource.id: [] for resource in problem.resources}
-    for operation in operations:
-        for window_index, window in enumerate(operation.resource_windows):
-            prologue_window_start = prologue_starts[operation.id] + window.start_offset
-            prologue_window_end = prologue_window_start + window.duration
-            intervals_by_resource[window.resource_id].append(
-                model.NewIntervalVar(
-                    prologue_window_start,
-                    window.duration,
-                    prologue_window_end,
-                    f"prologue_resource_{operation.id}_{window.resource_id}_{window_index}",
-                )
-            )
-            demands_by_resource[window.resource_id].append(window.amount)
-            for iteration in range(1, problem.loop.iterations):
-                body_window_start = model.NewIntVar(
-                    0,
-                    makespan_upper - window.duration,
-                    f"body_{iteration}_resource_start_{operation.id}_{window.resource_id}_{window_index}",
-                )
-                model.Add(
-                    body_window_start == body_start(operation.id, iteration) + window.start_offset
-                )
-                body_window_end = body_window_start + window.duration
-                intervals_by_resource[window.resource_id].append(
-                    model.NewIntervalVar(
-                        body_window_start,
-                        window.duration,
-                        body_window_end,
-                        f"body_{iteration}_resource_{operation.id}_{window.resource_id}_{window_index}",
-                    )
-                )
-                demands_by_resource[window.resource_id].append(window.amount)
-    for resource in problem.resources:
-        model.AddCumulative(
-            intervals_by_resource[resource.id],
-            demands_by_resource[resource.id],
-            resource.capacity,
-        )
-
     last_iteration = problem.loop.iterations - 1
     makespan = model.NewIntVar(0, makespan_upper, "makespan")
     completion_exprs = tuple(prologue_completion(operation) for operation in operations)

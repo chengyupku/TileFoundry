@@ -705,12 +705,15 @@ For each explicit resource window, every shifted interval
  start_offset(op) + window.start_offset + window.duration + i * II)
 ```
 
-must satisfy the declared capacity at every time across all integer `i`. M6.2
-checks the finite prologue and requested body prefix with derived resource
-interval auxiliaries, so a resourceful finite model may grow with the requested
-prefix. The periodic capacity check must include windows crossing the period
-boundary; a single representative period is valid only after its boundary
-overlaps with the preceding and following periods have been checked.
+must satisfy the declared capacity at every time across all integer `i`. M6.4
+uses a static body-window end bound `H` and a positive initiation-interval lower
+bound `L`. Every window that can intersect one representative `[0, II)` lies in
+the derived shift range `[-ceil(H / L), 0]`; earlier copies end before the
+representative interval and later copies start after it. A separate finite
+constraint combines the prologue windows with the positive body copies through
+`ceil(H / L)`, which are the only body copies that can overlap the prologue.
+The resulting model covers arbitrary capacity and demand, boundary overlap, and
+multi-period self-overlap without depending on the requested prefix length.
 
 For a fixed finite `iterations = N`, the objective cannot be only `min II`.
 The result must minimize the maximum completion over `0 <= i < N`, including
@@ -789,10 +792,10 @@ produce ordinary v3 rows accepted by the independent verifier.
   group; later body rows are materialized without per-iteration operation
   timing decisions. Iteration zero uses the external loop init, carried shared
   overwrite applies from iteration one, and the final iteration has no
-  successor requirement. Explicit resource windows participate in finite
-  capacity constraints through finite derived interval auxiliaries; the
-  resourceful model therefore still grows with the requested prefix. An
-  infinite period-boundary resource proof remains in step 6.4.
+  successor requirement. At step 6.2, explicit resource windows participated
+  in finite capacity constraints through per-prefix derived interval
+  auxiliaries. Step 6.4 replaces that temporary path with the compact infinite
+  period-boundary proof below.
 - [x] step 6.3 Retain the omitted-final-successor prefix rather than adding an
   independently searched peeled epilogue. Minimize the maximum completion over
   every prologue and finite body instance, then deterministically minimize `II`,
@@ -800,18 +803,22 @@ produce ordinary v3 rows accepted by the independent verifier.
   counter-witnesses that minimizing `II` alone can retain a worse finite
   makespan, and compare the selected boundary against the finite reference
   solver.
-- [ ] step 6.4 Define periodic lane/resource boundary checks, including a
+- [x] step 6.4 Define periodic lane/resource boundary checks, including a
   compact treatment of resource windows that avoids per-prefix auxiliary
   growth, windows crossing the period boundary, and completion sync that cannot
-  be inferred from issue order.
+  be inferred from issue order. The resource proof uses a statically derived
+  finite set of shifted body windows plus the finite prologue/body boundary;
+  it does not assume capacity one or a single adjacent period. Existing
+  completion-capable synchronization reduction remains separate from cyclic
+  lane issue order.
 - [ ] step 6.5 Define materialization of any finite prefix into existing
   `WarpgroupSchedule` v3 and independent verifier checks.
 
 #### Acceptance Criteria
 - [ ] AC-6-1: Periodic result size is independent of the requested iteration
-count; only on-demand v3 materialization grows with finite `N`. This remains
-unproven for resourceful finite problems while M6.2 uses per-prefix derived
-resource intervals.
+count; only on-demand v3 materialization grows with finite `N`. M6.4 removes
+the resource model's dependency on requested `N`; the end-to-end result-size
+criterion remains open until M6.5.
 - [ ] AC-6-2: Any materialized prefix is accepted or rejected by the existing
   independent verifier with no periodic-specific verifier path.
 - [ ] AC-6-3: Known small closed problems match the finite solver's optimal

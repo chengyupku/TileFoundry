@@ -1445,38 +1445,71 @@ def test_m6_1_verifier_rejects_one_iteration_period_shift() -> None:
         verify_warpgroup_schedule(problem, shifted)
 
 
-def test_m6_2_compact_model_variable_count_is_iteration_independent(
+def _periodic_resource_problem(
+    *, capacity: int, iterations: int, window_duration: int = 2
+) -> WarpgroupProblem:
+    types = (TensorType("result", (1,), DType.FP32, MemorySpace.REGISTER),)
+    return WarpgroupProblem(
+        PROBLEM_FORMAT_V3,
+        "cycle",
+        2,
+        (ResourceCapacity("engine", capacity),),
+        types,
+        (),
+        ProblemLoop(
+            "%iteration",
+            iterations,
+            (),
+            (
+                ProblemOperation(
+                    "early",
+                    (OperationOutput("%early", "result", ScalarLiteral(1.0)),),
+                    issue_duration=1,
+                    completion_latency=window_duration,
+                    resource_windows=(ResourceWindow("engine", 1, 0, window_duration),),
+                    warp_group=0,
+                ),
+                ProblemOperation(
+                    "late",
+                    (OperationOutput("%late", "result", ScalarLiteral(2.0)),),
+                    issue_duration=1,
+                    completion_latency=window_duration + 1,
+                    resource_windows=(ResourceWindow("engine", 1, 1, window_duration),),
+                    warp_group=1,
+                ),
+            ),
+        ),
+    )
+
+
+def test_m6_2_m6_4_compact_model_size_is_iteration_independent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cp_model = importlib.import_module("ortools.sat.python.cp_model")
     original_model = cp_model.CpModel
-    counts: list[int] = []
+    models: list[object] = []
 
     class CountingModel:
         def __init__(self) -> None:
             self.inner = original_model()
+            models.append(self.inner)
 
         def NewIntVar(self, *args: object, **kwargs: object) -> object:
-            counts[-1] += 1
             return self.inner.NewIntVar(*args, **kwargs)
 
         def NewBoolVar(self, *args: object, **kwargs: object) -> object:
-            counts[-1] += 1
             return self.inner.NewBoolVar(*args, **kwargs)
 
         def __getattr__(self, name: str) -> object:
             return getattr(self.inner, name)
 
     monkeypatch.setattr(cp_model, "CpModel", CountingModel)
-    for iterations in (2, 30):
-        counts.append(0)
-        problem = _periodic_problem()
-        problem = dataclasses.replace(
-            problem,
-            loop=dataclasses.replace(problem.loop, iterations=iterations),
-        )
-        solve_warpgroup_problem(problem)
-    assert counts[0] == counts[1]
+    shapes = []
+    for iterations in (3, 64):
+        solve_warpgroup_problem(_periodic_resource_problem(capacity=1, iterations=iterations))
+        proto = getattr(models[-1], "Proto")()
+        shapes.append((len(proto.variables), len(proto.constraints)))
+    assert shapes[0] == shapes[1]
 
 
 def test_m6_2_m6_3_compact_two_round_matches_finite_reference() -> None:
@@ -1514,38 +1547,43 @@ def test_m6_2_m6_3_compact_two_round_matches_finite_reference() -> None:
     assert reference_result.lanes == result.lanes
 
 
-def test_m6_2_fixed_owner_resource_windows_are_solved_before_export() -> None:
-    value_type = TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER)
-    problem = WarpgroupProblem(
-        PROBLEM_FORMAT_V3,
-        "cycle",
-        2,
-        (ResourceCapacity("engine", 1),),
-        (value_type,),
-        (),
-        ProblemLoop(
-            "%iteration",
-            2,
-            (),
-            tuple(
-                ProblemOperation(
-                    operation_id,
-                    (OperationOutput(f"%{operation_id}", "value", ScalarLiteral(1.0)),),
-                    issue_duration=1,
-                    completion_latency=5,
-                    resource_windows=(ResourceWindow("engine", 1, 0, 5),),
-                    warp_group=warp_group,
-                )
-                for operation_id, warp_group in (("first", 0), ("second", 1))
-            ),
-        ),
-    )
+def test_m6_4_periodic_resource_boundaries_are_compact_and_deterministic() -> None:
+    serialized: list[str] = []
+    for capacity, expected_ii in ((1, 4), (2, 2)):
+        problem = _periodic_resource_problem(capacity=capacity, iterations=3)
+        first = schedule_warpgroups(problem)
+        second = schedule_warpgroups(problem)
+        verify_warpgroup_schedule(problem, first.schedule)
+        assert first == second
+        first_json = warpgroup_schedule_to_json(first.schedule)
+        assert first_json == warpgroup_schedule_to_json(second.schedule)
+        serialized.append(first_json)
 
-    result = schedule_warpgroups(problem)
-    verify_warpgroup_schedule(problem, result.schedule)
-    windows = sorted((item.start, item.start + 5) for item in result.schedule.times)
-    assert all(left[1] <= right[0] for left, right in zip(windows, windows[1:]))
-    assert result.makespan == 20
+        times = {(item.iteration, item.operation_id): item for item in first.schedule.times}
+        ii = times[(2, "early")].start - times[(1, "early")].start
+        assert ii == expected_ii
+        early_window = (times[(1, "early")].start, times[(1, "early")].start + 2)
+        late_window = (times[(1, "late")].start + 1, times[(1, "late")].start + 3)
+        if capacity == 1:
+            assert early_window[1] <= late_window[0]
+            next_early = (times[(2, "early")].start, times[(2, "early")].start + 2)
+            assert late_window[1] <= next_early[0]
+        else:
+            assert max(early_window[0], late_window[0]) < min(early_window[1], late_window[1])
+
+    assert serialized[0] != serialized[1]
+
+    for capacity, expected_ii in ((4, 3), (5, 2)):
+        long_window = _periodic_resource_problem(capacity=capacity, iterations=3, window_duration=5)
+        long_result = schedule_warpgroups(long_window)
+        verify_warpgroup_schedule(long_window, long_result.schedule)
+        long_times = {
+            (item.iteration, item.operation_id): item for item in long_result.schedule.times
+        }
+        long_ii = long_times[(2, "early")].start - long_times[(1, "early")].start
+        assert long_ii == expected_ii
+        if capacity == 5:
+            assert (5 + long_ii - 1) // long_ii == 3
 
 
 def test_m6_2_external_shared_init_has_an_independent_prologue() -> None:

@@ -994,14 +994,33 @@ search worker, and a fixed random seed resolve any remaining equivalent
 witnesses. If the tie-break cannot be proven within the solve timeout, the
 result is not reported as optimal.
 
-Every declared resource window in the finite prologue and requested body
-prefix participates in the solver's capacity constraints, and the independent
-verifier checks the same finite windows. These finite resource constraints use
-derived interval auxiliaries for each requested window instance, so resourceful
-CP model size is not currently claimed to be independent of the prefix length.
-This does not claim an infinite periodic resource-capacity proof: windows
-crossing an unbounded period boundary remain deferred to later periodic
-resource-boundary work.
+Every declared resource window in the finite prologue participates in a finite
+capacity constraint. The periodic body is checked independently as an infinite
+repetition. Let `H` be the static upper bound on every unshifted body-window
+end, and let `L` be the static positive lower bound on `II`. To check one
+representative interval `[0, II)`, it is sufficient to include the
+conservative shift range
+
+```text
+-ceil(H / L) <= k <= 0
+```
+
+for every body window. A shift `k >= 1` starts no earlier than `II`; a shift
+below that lower bound ends no later than zero. Every capacity violation in the
+infinite repetition translates by an integer multiple of `II` into the
+representative interval, and every included interval is a real periodic copy.
+This finite `Cumulative` model therefore covers period-boundary overlap and
+self-overlap across more than one preceding period without a bound derived from
+the requested iteration count. The same static bound limits the positive body
+copies that can overlap a prologue window, because every prologue-window end is
+also at most `H`. Prologue interaction does not include nonexistent negative
+body periods.
+
+This construction applies unchanged to arbitrary positive capacity, amount,
+window offset, and window duration; resource behavior is still entirely
+explicit problem data. The independent verifier checks the windows present in
+the materialized finite prefix. It does not reconstruct or re-solve the
+infinite periodic resource proof.
 
 When a v3 prefix contains at least two body instances, the verifier derives
 `II` from iterations one and two and requires the same positive start delta for
