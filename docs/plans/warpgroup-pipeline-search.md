@@ -717,11 +717,12 @@ multi-period self-overlap without depending on the requested prefix length.
 
 For a fixed finite `iterations = N`, the objective cannot be only `min II`.
 The result must minimize the maximum completion over `0 <= i < N`, including
-start offsets and finite boundary work. M6.2 currently omits the final
-successor requirement but does not yet search a separately peeled epilogue;
-that choice and its finite-makespan effect are a M6.3 obligation. A smaller
-steady-state II can have a worse finite makespan when its phase or boundary
-work is later.
+start offsets and finite boundary work. Iteration zero is an independent finite
+prologue, and iterations `i >= 1` are periodic body rows. The last requested
+iteration remains a body row but has no nonexistent successor requirement. M6
+uses this omitted-final-successor finite-prefix contract; an independently
+searched peeled epilogue is not part of M6. A smaller steady-state II can have
+a worse finite makespan when its phase or boundary work is later.
 
 #### Boundary And Output Decision
 
@@ -730,7 +731,7 @@ Three representations were considered:
 | Representation | Decision |
 | --- | --- |
 | One steady-state template for all iterations | Rejected: it cannot express external iteration-zero init, `i >= 1` carried overwrite, or the final iteration without a successor. |
-| Finite prologue + periodic body + finite epilogue | Chosen eventual mathematical model: boundary instances are finite, while the repeated middle uses `II` and offsets. M6.2 currently implements the prologue plus a finite prefix whose final successor is omitted; M6.3 must decide and validate a peeled epilogue. |
+| Finite prologue + periodic body + omitted final successor | Chosen M6 model: iteration zero has independent finite timing, iterations `i >= 1` use `II` and offsets, and the final body row has no successor requirement. An independently searched peeled epilogue is outside the M6 contract. |
 | A new periodic JSON/schema result | Rejected for M6: periodic data is materialized on demand into existing `WarpgroupSchedule` v3. |
 
 The conceptual periodic certificate has only values that are not derivable
@@ -785,8 +786,8 @@ produce ordinary v3 rows accepted by the independent verifier.
   constraints, and verify the derived interval without adding schedule fields.
 - [x] step 6.2 Implement the compact finite prologue and periodic-body finite
   prefix contract without adding a serialized periodic result type. The final
-  row is a body row with its successor requirement omitted; it is not yet an
-  independently searched peeled epilogue.
+  row is a body row with its successor requirement omitted; an independently
+  searched peeled epilogue is not part of M6.
   The v3 CP-SAT model has one `II`, one body start offset and one finite
   prologue start per static operation, and one cyclic order per fixed warp
   group; later body rows are materialized without per-iteration operation
@@ -822,30 +823,32 @@ produce ordinary v3 rows accepted by the independent verifier.
   omitted-final-successor semantics.
 
 #### Acceptance Criteria
-- [ ] AC-6-1: Periodic result size is independent of the requested iteration
-count; only on-demand v3 materialization grows with finite `N`. M6.4 has
-evidence that resourceful CP-SAT variables and constraints do not grow with
-`N`, and M6.5 has evidence that only materialized `times` grow with `N`.
-AC-6-1 remains unchecked pending milestone closeout review.
-- [ ] AC-6-2: Any materialized prefix is accepted or rejected by the existing
-  independent verifier with no periodic-specific verifier path.
-- [ ] AC-6-3: Known small closed problems match the finite solver's optimal
+- [x] AC-6-1: Compact v3 CP-SAT model size is independent of the requested
+iteration count; only public materialized `times` grow as
+`N * operation_count`. The resourceful evidence is 40 variables and 79
+constraints for both `N=3` and `N=64`, with 6 and 128 materialized timing rows,
+respectively.
+- [x] AC-6-2: Every materialized prefix is accepted or rejected through the
+  same independent `verify_warpgroup_schedule(problem, schedule)` entry point,
+  without invoking CP-SAT or requiring a hidden periodic certificate. Necessary
+  v3 ownership and periodic-II semantic checks remain part of that verifier.
+- [x] AC-6-3: Known small closed problems match the finite solver's optimal
 makespan after materialization under the M6.3-selected
 omitted-final-successor contract.
-- [ ] AC-6-4: Required completion synchronization, including same-lane async
+- [x] AC-6-4: Required completion synchronization, including same-lane async
   dependencies and carried-shared finite overwrite edges, is never dropped.
-- [ ] AC-6-5: Infinite lane issue intervals and resource windows remain legal at
+- [x] AC-6-5: Infinite lane issue intervals and resource windows remain legal at
   every period boundary, including a compact resource-window treatment rather
   than finite-prefix auxiliary expansion.
-- [ ] AC-6-6: Repeated deterministic inputs produce identical periodic values
+- [x] AC-6-6: Repeated deterministic inputs produce identical periodic values
 and identical materialized v3 schedules.
-- [ ] AC-6-7: The design and eventual implementation load no TileProf, CUDA,
+- [x] AC-6-7: The design and eventual implementation load no TileProf, CUDA,
   target implementation, or operation-name-specific rule.
 <!-- policy_ac:start -->
-- [ ] Milestone MUST name a `#### Golden Reference` before implementation steps, with the source of truth and the observable functional points it determines. <!-- policy_ac: milestone_review-0 -->
-- [ ] The gate request MUST show the Golden Reference's functional points exercised through the smallest real workflow, naming the retained evidence; one workflow MAY cover several ACs, and a new test requires a stated reachability gap. <!-- policy_ac: milestone_review-1 -->
-- [ ] Touched tests and comments MUST be reviewed for redundancy: remove ones superseded by the retained workflow, and do not add source-shape or hypothetical-refactor guards unless that form is a public contract. <!-- policy_ac: milestone_review-2 -->
-- [ ] A milestone that changes a public contract MUST list the owning `docs/spec/*.md` path in its `#### Related Files`; one that changes none lists no spec path. <!-- policy_ac: spec_impact-0 -->
+- [x] Milestone MUST name a `#### Golden Reference` before implementation steps, with the source of truth and the observable functional points it determines. <!-- policy_ac: milestone_review-0 -->
+- [x] The gate request MUST show the Golden Reference's functional points exercised through the smallest real workflow, naming the retained evidence; one workflow MAY cover several ACs, and a new test requires a stated reachability gap. <!-- policy_ac: milestone_review-1 -->
+- [x] Touched tests and comments MUST be reviewed for redundancy: remove ones superseded by the retained workflow, and do not add source-shape or hypothetical-refactor guards unless that form is a public contract. <!-- policy_ac: milestone_review-2 -->
+- [x] A milestone that changes a public contract MUST list the owning `docs/spec/*.md` path in its `#### Related Files`; one that changes none lists no spec path. <!-- policy_ac: spec_impact-0 -->
 <!-- policy_ac:end -->
 
 ## Deferred Work
