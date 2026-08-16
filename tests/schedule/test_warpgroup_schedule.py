@@ -1505,46 +1505,79 @@ def test_m6_2_m6_4_compact_model_size_is_iteration_independent(
 
     monkeypatch.setattr(cp_model, "CpModel", CountingModel)
     shapes = []
+    results = []
+    schedules = []
     for iterations in (3, 64):
-        solve_warpgroup_problem(_periodic_resource_problem(capacity=1, iterations=iterations))
+        problem = _periodic_resource_problem(capacity=1, iterations=iterations)
+        result = solve_warpgroup_problem(problem)
+        schedule = export_warpgroup_schedule(problem, result)
+        verify_warpgroup_schedule(problem, schedule)
+        encoded = warpgroup_schedule_to_json(schedule)
+        assert warpgroup_schedule_to_json(warpgroup_schedule_from_json(encoded)) == encoded
+        results.append(result)
+        schedules.append(schedule)
         proto = getattr(models[-1], "Proto")()
         shapes.append((len(proto.variables), len(proto.constraints)))
     assert shapes[0] == shapes[1]
+    assert len(results[0].times) == 3 * 2
+    assert len(results[1].times) == 64 * 2
+    assert results[0].lanes == results[1].lanes
+    repeated_problem = _periodic_resource_problem(capacity=1, iterations=64)
+    repeated = schedule_warpgroups(repeated_problem)
+    assert warpgroup_schedule_to_json(repeated.schedule) == warpgroup_schedule_to_json(schedules[1])
 
 
-def test_m6_2_m6_3_compact_two_round_matches_finite_reference() -> None:
-    """A carried SSA edge is solved once and then expanded into two rows."""
+def test_m6_2_m6_3_m6_5_compact_prefixes_match_finite_reference() -> None:
+    """Finite materialization handles prologue, body, and omitted successor rows."""
     program = _fixed_owner_program()
-    problem = build_warpgroup_problem(program, _library(program))
-    result = solve_warpgroup_problem(problem)
-    schedule = export_warpgroup_schedule(problem, result)
-    verify_warpgroup_schedule(problem, schedule)
+    base_problem = build_warpgroup_problem(program, _library(program))
+    expected_makespan = {1: 5, 2: 10, 3: 15}
+    for iterations in (1, 2, 3):
+        types = tuple(
+            dataclasses.replace(item, shape=(iterations, *item.shape[1:]))
+            if item.id == "external"
+            else item
+            for item in base_problem.types
+        )
+        problem = dataclasses.replace(
+            base_problem,
+            types=types,
+            loop=dataclasses.replace(base_problem.loop, iterations=iterations),
+        )
+        result = solve_warpgroup_problem(problem)
+        schedule = export_warpgroup_schedule(problem, result)
+        verify_warpgroup_schedule(problem, schedule)
+        assert result.makespan == expected_makespan[iterations]
+        assert len(schedule.times) == iterations * len(problem.loop.ops)
+        encoded = warpgroup_schedule_to_json(schedule)
+        assert warpgroup_schedule_to_json(warpgroup_schedule_from_json(encoded)) == encoded
 
-    assert problem.dependencies() == (
+        reference = dataclasses.replace(
+            problem,
+            format=PROBLEM_FORMAT_V2,
+            loop=dataclasses.replace(
+                problem.loop,
+                ops=tuple(dataclasses.replace(item, warp_group=None) for item in problem.loop.ops),
+            ),
+        )
+        reference_result = solve_warpgroup_problem(reference)
+        assert reference_result.makespan == result.makespan
+        assert reference_result.lanes == result.lanes
+        if iterations == 1:
+            assert {item.iteration for item in schedule.times} == {0}
+        elif iterations == 2:
+            assert {item.iteration for item in schedule.times} == {0, 1}
+        elif iterations >= 3:
+            times = _time_map(result)
+            assert {
+                times[(iteration + 1, "load")].start - times[(iteration, "load")].start
+                for iteration in range(1, iterations - 1)
+            } == {5}
+
+    assert base_problem.dependencies() == (
         DefUseDependency("advance", "advance", 1),
         DefUseDependency("load", "advance", 0),
     )
-    times = _time_map(result)
-    assert {
-        times[(1, operation_id)].start - times[(0, operation_id)].start
-        for operation_id in ("load", "advance", "independent")
-    } == {5}
-    assert result.makespan == 10
-    assert result.lanes[0].operations == ("load", "advance")
-    assert result.lanes[1].operations == ("independent",)
-    assert result.lanes[2].operations == ()
-
-    reference = dataclasses.replace(
-        problem,
-        format=PROBLEM_FORMAT_V2,
-        loop=dataclasses.replace(
-            problem.loop,
-            ops=tuple(dataclasses.replace(item, warp_group=None) for item in problem.loop.ops),
-        ),
-    )
-    reference_result = solve_warpgroup_problem(reference)
-    assert reference_result.makespan == result.makespan
-    assert reference_result.lanes == result.lanes
 
 
 def test_m6_4_periodic_resource_boundaries_are_compact_and_deterministic() -> None:

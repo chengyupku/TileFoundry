@@ -232,6 +232,34 @@ def _add_compact_periodic_resource_constraints(
             )
 
 
+def _materialize_periodic_times(
+    operations: tuple[ProblemOperation, ...],
+    iterations: int,
+    prologue_starts: dict[str, int],
+    offsets: dict[str, int],
+    initiation_interval: int,
+) -> tuple[TimedOperation, ...]:
+    """Materialize finite prologue and periodic body rows after solving."""
+    times: list[TimedOperation] = []
+    for iteration in range(iterations):
+        for operation in operations:
+            start = (
+                prologue_starts[operation.id]
+                if iteration == 0
+                else offsets[operation.id] + iteration * initiation_interval
+            )
+            times.append(
+                TimedOperation(
+                    iteration,
+                    operation.id,
+                    start,
+                    issue_end=start + operation.issue_duration,
+                    completion=start + operation.completion_latency,
+                )
+            )
+    return tuple(sorted(times))
+
+
 def _solve_compact_fixed_owner_model(
     problem: WarpgroupProblem, timeout_seconds: float
 ) -> WarpgroupSolveResult:
@@ -484,28 +512,12 @@ def _solve_compact_fixed_owner_model(
         group.sort(key=lambda operation_id: (solver.Value(offsets[operation_id]), operation_id))
     lanes = tuple(WarpgroupLane(tuple(lane_groups[lane])) for lane in range(problem.warp_groups))
     ii = solver.Value(initiation_interval)
-    times = tuple(
-        TimedOperation(
-            iteration,
-            operation.id,
-            solver.Value(prologue_starts[operation.id])
-            if iteration == 0
-            else solver.Value(offsets[operation.id]) + iteration * ii,
-            issue_end=(
-                solver.Value(prologue_starts[operation.id]) + operation.issue_duration
-                if iteration == 0
-                else solver.Value(offsets[operation.id]) + iteration * ii + operation.issue_duration
-            ),
-            completion=(
-                solver.Value(prologue_starts[operation.id]) + operation.completion_latency
-                if iteration == 0
-                else solver.Value(offsets[operation.id])
-                + iteration * ii
-                + operation.completion_latency
-            ),
-        )
-        for iteration in range(problem.loop.iterations)
-        for operation in operations
+    times = _materialize_periodic_times(
+        operations,
+        problem.loop.iterations,
+        {operation.id: solver.Value(prologue_starts[operation.id]) for operation in operations},
+        {operation.id: solver.Value(offsets[operation.id]) for operation in operations},
+        ii,
     )
     return WarpgroupSolveResult(
         "OPTIMAL" if final_status == cp_model.OPTIMAL else "FEASIBLE_NOT_PROVEN",

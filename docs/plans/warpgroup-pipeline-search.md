@@ -811,19 +811,27 @@ produce ordinary v3 rows accepted by the independent verifier.
   it does not assume capacity one or a single adjacent period. Existing
   completion-capable synchronization reduction remains separate from cyclic
   lane issue order.
-- [ ] step 6.5 Define materialization of any finite prefix into existing
-  `WarpgroupSchedule` v3 and independent verifier checks.
+- [x] step 6.5 Define materialization of any finite prefix into existing
+  `WarpgroupSchedule` v3 and independent verifier checks. The v3 solver keeps
+  only prologue starts, body offsets, `II`, and fixed lane order; one private
+  materialization helper emits one timing row per operation per requested
+  iteration, exactly `N * operation_count` rows. `N=1`
+  emits only the prologue, `N=2` emits one body row without a recoverable `II`,
+  and `N>=3` uses `offset + i * II` for every later row. Export and independent
+  verification remain the single post-solve path, with the final row retaining
+  omitted-final-successor semantics.
 
 #### Acceptance Criteria
 - [ ] AC-6-1: Periodic result size is independent of the requested iteration
-count; only on-demand v3 materialization grows with finite `N`. M6.4 removes
-the resource model's dependency on requested `N`; the end-to-end result-size
-criterion remains open until M6.5.
+count; only on-demand v3 materialization grows with finite `N`. M6.4 has
+evidence that resourceful CP-SAT variables and constraints do not grow with
+`N`, and M6.5 has evidence that only materialized `times` grow with `N`.
+AC-6-1 remains unchecked pending milestone closeout review.
 - [ ] AC-6-2: Any materialized prefix is accepted or rejected by the existing
   independent verifier with no periodic-specific verifier path.
 - [ ] AC-6-3: Known small closed problems match the finite solver's optimal
-makespan after materialization, including the eventual peeled-epilogue or
-omitted-successor boundary decision.
+makespan after materialization under the M6.3-selected
+omitted-final-successor contract.
 - [ ] AC-6-4: Required completion synchronization, including same-lane async
   dependencies and carried-shared finite overwrite edges, is never dropped.
 - [ ] AC-6-5: Infinite lane issue intervals and resource windows remain legal at
