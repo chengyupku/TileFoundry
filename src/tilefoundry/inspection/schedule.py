@@ -89,6 +89,8 @@ _HTML_TEMPLATE = r"""<!doctype html>
     .swatch-tail { border:1px dashed #7b8793; background:#d8dee5; opacity:.6; }
     .swatch-sync0 { border:1px dashed #8995a1; background:#fff; }
     .swatch-sync1 { border:1px dashed #c14646; background:#fff; }
+    .swatch-iteration-start { border-left:2px solid #1769aa; }
+    .swatch-iteration-end { border-left:2px solid #c14646; }
     .canvas { overflow:auto; padding:20px 30px 28px; background:var(--paper); }
     svg { display:block; min-height:190px; }
     .bar { cursor:pointer; }
@@ -98,6 +100,9 @@ _HTML_TEMPLATE = r"""<!doctype html>
     .lane-label { fill:#34404b; font-size:12px; font-weight:750; }
     .lane-meta { fill:#87919b; font-size:10px; }
     .axis-label { fill:#66717d; font-size:10px; font-variant-numeric:tabular-nums; }
+    .iteration-label { fill:#34404b; font-size:10px; font-weight:750; }
+    .iteration-start-label { fill:#1769aa; font-size:9px; font-variant-numeric:tabular-nums; }
+    .iteration-end-label { fill:#a83b3b; font-size:9px; font-variant-numeric:tabular-nums; }
     .empty { fill:#66717d; font-size:13px; }
     .details { min-height:76px; padding:12px 30px 16px; border-top:1px solid var(--line); background:var(--panel); color:var(--muted); }
     .details strong { color:var(--ink); }
@@ -131,6 +136,8 @@ _HTML_TEMPLATE = r"""<!doctype html>
     <span class="legend-item"><i class="swatch swatch-tail"></i>completion tail</span>
     <span class="legend-item"><i class="swatch swatch-sync0"></i>distance-0 sync</span>
     <span class="legend-item"><i class="swatch swatch-sync1"></i>distance-1 sync</span>
+    <span class="legend-item"><i class="swatch swatch-iteration-start"></i>iteration start</span>
+    <span class="legend-item"><i class="swatch swatch-iteration-end"></i>iteration end</span>
   </div>
   <main class="canvas"><svg id="chart" role="img" aria-label="Warpgroup schedule timeline"></svg></main>
   <div class="details" id="details">Hover or focus a block to inspect its timing witness.</div>
@@ -158,10 +165,15 @@ _HTML_TEMPLATE = r"""<!doctype html>
       if (text !== null) element.textContent = String(text);
       return element;
     };
+    const htmlNode = (name, text) => {
+      const element = document.createElement(name);
+      element.textContent = String(text);
+      return element;
+    };
     const makeStat = (value, label) => {
       const item = document.createElement('div');
       item.className = 'stat';
-      item.append(node('strong', {}, value), node('span', {}, label));
+      item.append(htmlNode('strong', value), htmlNode('span', label));
       return item;
     };
     const niceStep = value => {
@@ -189,12 +201,29 @@ _HTML_TEMPLATE = r"""<!doctype html>
     };
     function render() {
       const items = visible();
-      const visibleStart = items.length ? Math.min(...items.map(item => item.start)) : 0;
-      const visibleCompletion = items.length ? Math.max(...items.map(item => item.completion)) : 1;
+      const selected = iteration.value;
+      const scaleItems = selected === 'all'
+        ? times
+        : times.filter(item => item.iteration === Number(selected));
+      const visibleStart = scaleItems.length ? Math.min(...scaleItems.map(item => item.start)) : 0;
+      const visibleCompletion = scaleItems.length ? Math.max(...scaleItems.map(item => item.completion)) : 1;
       const visibleSpan = Math.max(1, visibleCompletion - visibleStart);
       const left = 145;
       const right = 36;
-      const top = 44;
+      const markerIterations = selected === 'all'
+        ? iterations
+        : iterations.filter(value => value === Number(selected));
+      const iterationBounds = markerIterations.map(value => {
+        const rows = times.filter(item => item.iteration === value);
+        return {
+          iteration: value,
+          start: Math.min(...rows.map(item => item.start)),
+          end: Math.max(...rows.map(item => item.completion)),
+        };
+      });
+      const iterationRowHeight = 25;
+      const iterationTrackHeight = Math.max(1, iterationBounds.length) * iterationRowHeight;
+      const top = 20 + iterationTrackHeight + 12;
       const laneHeight = 72;
       const axisHeight = 28;
       const viewportWidth = Math.max(720, window.innerWidth - 60);
@@ -203,12 +232,26 @@ _HTML_TEMPLATE = r"""<!doctype html>
       const width = Math.max(viewportWidth, left + visibleSpan * pxPerTime + right);
       const height = top + DATA.lanes.length * laneHeight + axisHeight;
       const relative = time => (time - visibleStart) * pxPerTime;
+      const iterationMarkers = [];
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
       svg.style.width = `${width}px`;
       svg.style.height = `${height}px`;
       svg.replaceChildren();
       zoomValue.textContent = `${Number(zoom.value).toFixed(2)}x fit (${formatNumber(pxPerTime)} px/t)`;
       svg.appendChild(node('rect', { x:0, y:0, width, height, rx:6, fill:'#fff', stroke:'#d8dee5' }));
+      svg.appendChild(node('text', { x:10, y:15, class:'lane-meta' }, 'iteration timeline'));
+      iterationBounds.forEach((bound, index) => {
+        const rowY = 20 + index * iterationRowHeight;
+        const startX = left + relative(bound.start);
+        const endX = left + relative(bound.end);
+        const selectedRow = selected !== 'all' && Number(selected) === bound.iteration;
+        const trackFill = selectedRow ? '#e5f0f8' : index % 2 ? '#f5f8fa' : '#eef3f6';
+        svg.appendChild(node('text', { x:10, y:rowY + 16, class:'iteration-label' }, `iteration ${bound.iteration}`));
+        svg.appendChild(node('rect', { x:startX, y:rowY + 5, width:Math.max(1, endX - startX), height:14, rx:3, fill:trackFill, stroke:'#cdd6de' }));
+        iterationMarkers.push({ startX, endX, rowY, selectedRow });
+        svg.appendChild(node('text', { x:startX + 3, y:rowY + 16, class:'iteration-start-label' }, `start ${formatNumber(bound.start)}`));
+        svg.appendChild(node('text', { x:endX - 3, y:rowY + 16, 'text-anchor':'end', class:'iteration-end-label' }, `end ${formatNumber(bound.end)}`));
+      });
       DATA.lanes.forEach((lane, laneIndex) => {
         const y = top + laneIndex * laneHeight;
         svg.appendChild(node('rect', { x:0, y, width, height:laneHeight, fill:laneIndex % 2 ? '#fbfcfd' : '#fff' }));
@@ -226,6 +269,10 @@ _HTML_TEMPLATE = r"""<!doctype html>
         svg.appendChild(node('line', { x1:x, y1:top - 18, x2:x, y2:height - axisHeight, stroke:'#e9edf1' }));
         svg.appendChild(node('text', { x, y:height - 8, 'text-anchor':'middle', class:'axis-label' }, formatNumber(visibleStart + tick)));
       }
+      iterationMarkers.forEach(({ startX, endX, rowY, selectedRow }) => {
+        svg.appendChild(node('line', { x1:startX, y1:rowY + 1, x2:startX, y2:height - axisHeight, stroke:'#1769aa', 'stroke-width':selectedRow ? 1.5 : 1, opacity:selectedRow ? .9 : .6 }));
+        svg.appendChild(node('line', { x1:endX, y1:rowY + 1, x2:endX, y2:height - axisHeight, stroke:'#c14646', 'stroke-width':selectedRow ? 1.5 : 1, opacity:selectedRow ? .9 : .6 }));
+      });
       if (showSync.checked) {
         const visibleKeys = new Set(items.map(item => `${item.iteration}:${item.id}`));
         const defs = node('defs');
@@ -272,8 +319,15 @@ _HTML_TEMPLATE = r"""<!doctype html>
         makeStat(DATA.sync.length, 'sync edges'),
       );
     }
-    for (const value of iterations) iteration.appendChild(node('option', { value }, `Iteration ${value}`));
-    iteration.insertBefore(node('option', { value:'all' }, 'All iterations'), iteration.firstChild);
+    for (const value of iterations) {
+      const option = htmlNode('option', `Iteration ${value}`);
+      option.value = String(value);
+      iteration.appendChild(option);
+    }
+    const allIterations = htmlNode('option', 'All iterations');
+    allIterations.value = 'all';
+    iteration.insertBefore(allIterations, iteration.firstChild);
+    iteration.value = 'all';
     [iteration, filter, showSync, zoom].forEach(control => {
       control.addEventListener('input', render);
       control.addEventListener('change', render);

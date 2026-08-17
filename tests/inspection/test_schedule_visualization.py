@@ -59,6 +59,10 @@ def test_render_generic_timing() -> None:
     assert "completion tail" in document
     assert "distance-0 sync" in document
     assert "distance-1 sync" in document
+    assert "iteration timeline" in document
+    assert "iteration-start-label" in document
+    assert "iteration-end-label" in document
+    assert "iteration.value = 'all'" in document
     assert "operation family" not in document
 
 
