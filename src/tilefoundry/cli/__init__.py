@@ -39,6 +39,7 @@ _COMMANDS = {
     "check": "compare an implementation against its reference, output by output",
     "analyze": "type-check and analyze authored HIR",
     "schedule": "schedule authored HIR or an explicit warpgroup JSON document",
+    "visualize": "render a warpgroup schedule as an interactive swimlane diagram",
     "inspect": "inspect installed target facts",
 }
 
@@ -246,6 +247,21 @@ def build_parser(*, _selected_command: str | None = None) -> argparse.ArgumentPa
         "searching the whole budget for the best one",
     )
 
+    visualize = commands.add_parser("visualize", help=_COMMANDS["visualize"])
+    visualize.add_argument("schedule", metavar="SCHEDULE.json", help="warpgroup schedule JSON")
+    visualize.add_argument(
+        "--out",
+        metavar="OUTPUT.html",
+        help="output HTML path; defaults to SCHEDULE.html, or '-' for stdout",
+    )
+    visualize.add_argument("--title", help="title shown above the diagram")
+    visualize.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_browser",
+        help="open the generated HTML in the default browser",
+    )
+
     inspect = commands.add_parser("inspect", help=_COMMANDS["inspect"])
     inspect_commands = inspect.add_subparsers(dest="inspect_command", parser_class=_Parser)
     capabilities = inspect_commands.add_parser(
@@ -371,6 +387,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except (ExtractError, ScheduleError, OSError, TypeError, ValueError) as error:
             print(f"tilefoundry: error: {error}", file=sys.stderr)
+            return 1
+
+    if args.command == "visualize":
+        try:
+            from tilefoundry.cli.visualize import run_visualize  # noqa: PLC0415
+
+            return run_visualize(
+                args.schedule,
+                output=args.out,
+                title=args.title,
+                open_browser=args.open_browser,
+            )
+        except (OSError, TypeError, ValueError) as error:
+            print(f"tilefoundry visualize: error: {error}", file=sys.stderr)
             return 1
 
     analyses = tuple(name for name in _ANALYSES if getattr(args, name.replace("-", "_")))

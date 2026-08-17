@@ -38,8 +38,23 @@ tilefoundry schedule model.py[:Module[.child_module...][.function]] --topology L
     [--dim NAME=EXTENT ...] [--solver-timeout SECONDS] [--solver-workers COUNT]
     [--first-plan]
 
+tilefoundry visualize SCHEDULE.json [--out OUTPUT.html] [--title TITLE] [--open]
+
 tilefoundry inspect [capabilities [SOURCE]]
 ```
+
+`visualize` reads a validated `tilefoundry.warpgroup_schedule.v1`, `.v2`, or
+`.v3` document and writes a self-contained HTML/SVG swimlane diagram. Version 1
+time rows `[iteration, id, start, end]` are normalized to an equal issue end
+and completion; versions 2 and 3 use `[iteration, id, start, issue_end,
+completion]`. Each lane is a horizontal row, solid blocks show issue occupancy,
+and a translucent tail shows
+the interval from issue end to result completion. The page includes iteration
+selection, operation filtering, scale control, and an optional synchronization
+overlay. Without `--out`, the output is written next to the input with an
+`.html` suffix; `--out -` writes the document to standard output. `--open`
+opens a written document with the default browser. `--out -` and `--open` are
+mutually exclusive and are rejected together.
 
 `SOURCE` is a Python file followed optionally by
 `:Module[.child_module...][.function]`. Without a selector, the source must
