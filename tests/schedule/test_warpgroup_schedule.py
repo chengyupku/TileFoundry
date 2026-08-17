@@ -1893,10 +1893,10 @@ def test_mla_schedule_example_documents_are_independently_verifiable() -> None:
         verify_warpgroup_schedule(problem, schedule)
 
 
-def test_lsy_reference_documents_and_complete_workflow_are_one_smoke_test() -> None:
-    program = warpgroup_program_from_json(_document("lsy-schedule-input.json"))
+def test_mla_reference_documents_and_complete_workflow_are_one_smoke_test() -> None:
+    program = warpgroup_program_from_json(_document("mla-schedule-program.json"))
     reference_problem = warpgroup_problem_from_json(_document("warpgroup-closed-problem.json"))
-    reference_schedule = warpgroup_schedule_from_json(_document("lsy-schedule-output.json"))
+    reference_schedule = warpgroup_schedule_from_json(_document("mla-schedule-output.json"))
     library = _library(program)
     problem = build_warpgroup_problem(program, library)
     result = schedule_warpgroups(program, library)

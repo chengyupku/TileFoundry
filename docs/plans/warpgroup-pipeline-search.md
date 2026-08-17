@@ -30,10 +30,10 @@ happens-before relations, and one concrete timed realization.
 
 The design examples are:
 
-- [authored program](../design/lsy-schedule-input.json)
+- [authored program](../design/mla-schedule-program.json)
 - [closed problem](../design/warpgroup-closed-problem.json)
-- [schedule output](../design/lsy-schedule-output.json)
-- [minimal scheduling contract](../design/lsy-synchronization-schedule.md)
+- [schedule output](../design/mla-schedule-output.json)
+- [minimal scheduling contract](../design/mla-synchronization-schedule.md)
 
 They model the central loop of FlashMLA sparse prefill and establish the
 intended level of abstraction. They are examples until M0 moves their durable
@@ -193,10 +193,10 @@ does not require one implementation file per listed name.
 - None
 
 #### Golden Reference
-- Source: [minimal scheduling contract](../design/lsy-synchronization-schedule.md),
-  [authored program](../design/lsy-schedule-input.json),
+- Source: [minimal scheduling contract](../design/mla-synchronization-schedule.md),
+  [authored program](../design/mla-schedule-program.json),
   [closed problem](../design/warpgroup-closed-problem.json),
-  [schedule output](../design/lsy-schedule-output.json), and
+  [schedule output](../design/mla-schedule-output.json), and
   [schedule](../spec/schedule.md).
 - Functional points: one explicit finite loop; SSA-derived dependencies;
   anonymous warpgroup placement; register locality; shared cross-lane and
@@ -205,10 +205,10 @@ does not require one implementation file per listed name.
 #### Related Files
 - `docs/spec/schedule.md`
 - `src/tilefoundry/schedule/warpgroup/__init__.py`
-- `docs/design/lsy-synchronization-schedule.md`
-- `docs/design/lsy-schedule-input.json`
+- `docs/design/mla-synchronization-schedule.md`
+- `docs/design/mla-schedule-program.json`
 - `docs/design/warpgroup-closed-problem.json`
-- `docs/design/lsy-schedule-output.json`
+- `docs/design/mla-schedule-output.json`
 - `src/tilefoundry/__init__.py`
 - `src/tilefoundry/schedule/__init__.py`
 - `src/tilefoundry/schedule/registry.py`
@@ -327,7 +327,7 @@ does not require one implementation file per listed name.
 - M1
 
 #### Golden Reference
-- Source: [minimal scheduling contract](../design/lsy-synchronization-schedule.md), [OR-Tools interval scheduling](https://developers.google.com/optimization/scheduling), and the retained CP-SAT modeling conventions in `src/tilefoundry/schedule/partition/solve.py`.
+- Source: [minimal scheduling contract](../design/mla-synchronization-schedule.md), [OR-Tools interval scheduling](https://developers.google.com/optimization/scheduling), and the retained CP-SAT modeling conventions in `src/tilefoundry/schedule/partition/solve.py`.
 - Functional points: anonymous lane assignment; stable per-lane loop-body
   order; finite expansion; SSA, recurrence, resource, locality, and lifetime
   constraints; minimum makespan with deterministic output.
@@ -402,7 +402,7 @@ does not require one implementation file per listed name.
 - M2
 
 #### Golden Reference
-- Source: [schedule output](../design/lsy-schedule-output.json), [minimal scheduling contract](../design/lsy-synchronization-schedule.md), and the synchronization semantics in [TIR](../spec/tir.md#sync).
+- Source: [schedule output](../design/mla-schedule-output.json), [minimal scheduling contract](../design/mla-synchronization-schedule.md), and the synchronization semantics in [TIR](../spec/tir.md#sync).
 - Functional points: compact lane programs; explicit happens-before edges;
   cross-iteration distance; concrete time witness; verification without
   re-solving or trusting CP-SAT.
@@ -481,8 +481,8 @@ does not require one implementation file per listed name.
 - `tests/schedule/test_warpgroup_schedule.py`
 - `tests/schedule/test_pipeline.py`
 - `tests/integration/installed/smoke_schedule.py`
-- `docs/design/lsy-schedule-input.json`
-- `docs/design/lsy-schedule-output.json`
+- `docs/design/mla-schedule-program.json`
+- `docs/design/mla-schedule-output.json`
 
 #### Plan
 - [x] step 4.1 Expose typed `build_warpgroup_problem`,
@@ -513,7 +513,7 @@ does not require one implementation file per listed name.
 - [x] AC-4-3: The retained FlashMLA workflow exchanges P0 and P1 through shared
   memory, keeps the two output halves lane-local, overlaps producer and
   consumer work, and begins next-iteration copy before prior-iteration
-  consumer completion. The retained LSY smoke derives both register-to-shared
+  consumer completion. The retained MLA smoke derives both register-to-shared
   probability publications from typed SSA, requires each unique cross-lane
   consumer and its distance-zero synchronization edge, and proves that the two
   carried output-half def-use components are individually lane-local on two

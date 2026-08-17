@@ -3,9 +3,9 @@
 This document illustrates the kernel-independent warpgroup boundary specified
 in [schedule §6](../spec/schedule.md#6-warpgroup-scheduling-documents). The
 three concrete documents are the authored
-[program](./lsy-schedule-input.json), its independently serializable
+[program](./mla-schedule-program.json), its independently serializable
 [closed problem](./warpgroup-closed-problem.json), and an
-[LSY-style result](./lsy-schedule-output.json). They are design artifacts, not
+[MLA schedule result](./mla-schedule-output.json). They are design artifacts, not
 public `SchedulePlan` types.
 
 The example models the central loop of FlashMLA sparse prefill
@@ -187,7 +187,7 @@ input duration. Times must respect SSA def-use, iter args, lane order,
 resource capacities, synchronization records, and shared-allocation reuse. The
 makespan is `max(end)` and is therefore not repeated as a field.
 
-## LSY Result
+## Reference Result
 
 The concrete result selects these lane orders:
 

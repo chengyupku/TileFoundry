@@ -56,7 +56,7 @@ class _MissingType:
     def __repr__(self) -> str:
         return "<MISSING>"
 
-    def __bool__(self) -> bool:  # treat as falsy for convenience
+    def __bool__(self) -> bool:  # treat as false for convenience
         return False
 
 MISSING: _MissingType = _MissingType()
