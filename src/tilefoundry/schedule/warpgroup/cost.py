@@ -146,7 +146,7 @@ class OperationCost:
                 "operation resource windows must contain exact ResourceWindow records"
             )
         for window in windows:
-            if window.start_offset + window.duration > self.completion_latency:
+            if window.duration > self.completion_latency:
                 raise WarpgroupValidationError("resource window exceeds completion latency")
         object.__setattr__(self, "resource_windows", tuple(sorted(windows)))
 

@@ -459,14 +459,13 @@ def _decode_windows(value: object) -> tuple[ResourceWindow, ...]:
     for raw in _array(value, "resource windows"):
         item = _object(
             raw,
-            fields=frozenset({"resource_id", "amount", "start_offset", "duration"}),
+            fields=frozenset({"resource_id", "amount", "duration"}),
             label="resource window",
         )
         windows.append(
             ResourceWindow(
                 _string(item["resource_id"], "resource window ID"),
                 _integer(item["amount"], "resource window amount"),
-                _integer(item["start_offset"], "resource window start offset"),
                 _integer(item["duration"], "resource window duration"),
             )
         )
@@ -481,7 +480,6 @@ def _encode_windows(windows: tuple[ResourceWindow, ...]) -> list[object]:
             {
                 "resource_id": item.resource_id,
                 "amount": item.amount,
-                "start_offset": item.start_offset,
                 "duration": item.duration,
             }
         )

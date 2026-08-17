@@ -126,9 +126,9 @@ def _hardware(program: WarpgroupProgram, *, capacity: int = 1) -> WarpgroupHardw
         if operation.id == "load":
             cost = OperationCost(1, 3, ())
         elif operation.id == "compute":
-            cost = OperationCost(1, 2, (ResourceWindow("engine", 1, 0, 2),))
+            cost = OperationCost(1, 2, (ResourceWindow("engine", 1, 2),))
         else:
-            cost = OperationCost(1, 1, (ResourceWindow("engine", 1, 0, 1),))
+            cost = OperationCost(1, 1, (ResourceWindow("engine", 1, 1),))
         costs[signature] = cost
     entries = tuple(
         OperationCostEntry(signature, cost)
@@ -309,7 +309,7 @@ def _periodic_resource_problem(
                     0,
                     1,
                     window_duration,
-                    (ResourceWindow("engine", 1, 0, window_duration),),
+                    (ResourceWindow("engine", 1, window_duration),),
                 ),
                 ProblemOperation(
                     "late",
@@ -317,7 +317,7 @@ def _periodic_resource_problem(
                     1,
                     1,
                     window_duration + 1,
-                    (ResourceWindow("engine", 1, 1, window_duration),),
+                    (ResourceWindow("engine", 1, window_duration),),
                 ),
             ),
         ),

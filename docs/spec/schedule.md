@@ -66,7 +66,7 @@ Every closed operation has:
 
 - `issue_duration`: lane occupancy after start;
 - `completion_latency`: time until outputs are ready;
-- `resource_windows`: resource, amount, start offset, and duration.
+- `resource_windows`: resource, amount, and duration, beginning at operation start.
 
 Lane `NoOverlap` applies to issue intervals. SSA visibility and shared-memory
 lifetime use completion. Resources use cumulative capacity over their declared
@@ -90,7 +90,7 @@ boundary, so the first consumer may overlap the first publication.
 The internal problem uses a compact periodic model:
 
 - one prologue start per operation;
-- one body start offset per operation;
+- one periodic-body start time per operation;
 - one global positive initiation interval;
 - one cyclic issue order per fixed warpgroup.
 

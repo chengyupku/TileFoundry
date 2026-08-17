@@ -514,8 +514,8 @@
       }
     },
     {
-      "completion_latency": 129,
-      "issue_duration": 129,
+      "completion_latency": 135,
+      "issue_duration": 135,
       "resource_windows": [],
       "signature": {
         "kind": "compute",
@@ -617,8 +617,8 @@
       }
     },
     {
-      "completion_latency": 73,
-      "issue_duration": 73,
+      "completion_latency": 77,
+      "issue_duration": 77,
       "resource_windows": [],
       "signature": {
         "kind": "compute",
@@ -1717,8 +1717,8 @@
       }
     },
     {
-      "completion_latency": 129,
-      "issue_duration": 129,
+      "completion_latency": 135,
+      "issue_duration": 135,
       "resource_windows": [],
       "signature": {
         "kind": "compute",
@@ -2963,7 +2963,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3009,7 +3009,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3055,7 +3055,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3101,7 +3101,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3147,7 +3147,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3193,7 +3193,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3239,7 +3239,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3285,7 +3285,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3331,7 +3331,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3377,7 +3377,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3423,7 +3423,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3469,7 +3469,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3515,7 +3515,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3561,7 +3561,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3607,7 +3607,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3653,7 +3653,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3699,7 +3699,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {
@@ -3745,7 +3745,7 @@
       }
     },
     {
-      "completion_latency": 427,
+      "completion_latency": 425,
       "issue_duration": 114,
       "resource_windows": [],
       "signature": {

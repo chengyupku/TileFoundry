@@ -189,7 +189,7 @@ def _verify_resources(problem: WarpgroupProblem, times: dict[_Instance, TimedOpe
             for window in operation.resource_windows:
                 if window.resource_id != resource.id:
                     continue
-                start = timed.start + window.start_offset
+                start = timed.start
                 end = start + window.duration
                 changes[start] += window.amount
                 changes[end] -= window.amount

@@ -224,17 +224,15 @@ class ResourceCapacity:
 
 @dataclass(frozen=True, slots=True, order=True)
 class ResourceWindow:
-    """One explicit temporal resource window relative to operation start."""
+    """One temporal resource window beginning at operation start."""
 
     resource_id: str
     amount: int
-    start_offset: int
     duration: int
 
     def __post_init__(self) -> None:
         validate_id(self.resource_id, "resource window ID")
         positive_int(self.amount, f"resource window {self.resource_id!r} amount")
-        non_negative_int(self.start_offset, f"resource window {self.resource_id!r} start offset")
         positive_int(self.duration, f"resource window {self.resource_id!r} duration")
 
 
@@ -274,7 +272,7 @@ class ProblemOperation:
             f"operation {self.id!r} resource windows",
         )
         for window in windows:
-            if window.start_offset + window.duration > self.completion_latency:
+            if window.duration > self.completion_latency:
                 raise WarpgroupValidationError(
                     f"operation {self.id!r} resource window exceeds completion latency"
                 )

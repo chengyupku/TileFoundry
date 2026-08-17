@@ -128,7 +128,7 @@ def _add_compact_periodic_resource_constraints(
 
     for operation in operations:
         for window_index, window in enumerate(operation.resource_windows):
-            prologue_start = prologue_starts[operation.id] + window.start_offset
+            prologue_start = prologue_starts[operation.id]
             add_window(
                 boundary_intervals,
                 boundary_demands,
@@ -140,7 +140,7 @@ def _add_compact_periodic_resource_constraints(
             if problem.loop.iterations < 2:
                 continue
 
-            base_start = offsets[operation.id] + window.start_offset
+            base_start = offsets[operation.id]
             # Every base window lies in [0, horizon].  Any infinite-period copy
             # intersecting [0, II) therefore has shift in [-copy_bound, 0].
             for shift in range(-copy_bound, 1):
@@ -228,7 +228,7 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
     initiation_interval = model.NewIntVar(1, horizon, "II")
     offsets = {
         operation.id: model.NewIntVar(
-            0, horizon - operation.completion_latency, f"start_offset_{operation.id}"
+            0, horizon - operation.completion_latency, f"body_offset_{operation.id}"
         )
         for operation in operations
     }
