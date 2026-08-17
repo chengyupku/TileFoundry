@@ -1,4 +1,0 @@
-module=/private/tmp/m2-gate-094226-py312-cpsat-test/lib/python3.12/site-packages/tilefoundry_costmodel/__init__.py
-[{"configuration_id":"49da4435847adab630489ce377de207ee1550654f923fda47e3f88c1426d88b1","pipeline_depth":2,"profile_keys":["4cf5ccb05a64bc7f0946c93d9f5a0e5aa3d7d926932a1ad546f6ec1bafa4b9ad"],"slot_count":2,"static_units":1024},{"configuration_id":"c1c889609a813fe7653ec20478e54ad6dde2519c60d81b11647c746e5464a5e7","pipeline_depth":3,"profile_keys":["ffafc87a8b0fe273c8ca7a236cbcaaf10142802cfce5df919869088122db5ee6"],"slot_count":3,"static_units":1536},{"configuration_id":"d85524c7c534017944fa67c808934d96e269f401baacd7a0310e7cda40df2958","pipeline_depth":1,"profile_keys":["df7145599d1353681e6a2cf77e09f698701cbf7fd592db926fa7b8b78c3fb622"],"slot_count":1,"static_units":512}]
-golden_sha256=1acaec7311fd9a1cb4795bf551693f4eaac5bdd333f06a146ae7007725bb72f7
-import_boundary=PASS

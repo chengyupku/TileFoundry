@@ -206,7 +206,7 @@ class OperationCostEntry:
 
 
 class CostLibrary(Protocol):
-    """The dependency-free provider boundary consumed by M1 build."""
+    """The dependency-free provider boundary consumed by problem construction."""
 
     @property
     def time_unit(self) -> str: ...

@@ -7,6 +7,7 @@ H200 timing values. They differ only in the requested finite loop extent.
 
 Files:
 
+- `program.json`: typed semantic program with fixed warpgroup ownership.
 - `problem-2.json`: two-iteration `WarpgroupProblem` v3.
 - `schedule-2.json`: verified two-iteration `WarpgroupSchedule` v3, with 102
   timed instances, 48 synchronization edges, and makespan 8291 cycles.
@@ -26,12 +27,12 @@ Replay both schedules from the repository root:
 
 ```bash
 .venv/bin/python -m tilefoundry.cli schedule \
-  --warpgroup-problem examples/mla-schedule/problem-2.json \
+  --problem examples/mla-schedule/problem-2.json \
   --solver-timeout 60 \
   --json > /tmp/mla-h200-schedule-2.json
 
 .venv/bin/python -m tilefoundry.cli schedule \
-  --warpgroup-problem examples/mla-schedule/problem-16.json \
+  --problem examples/mla-schedule/problem-16.json \
   --solver-timeout 60 \
   --json > /tmp/mla-h200-schedule-16.json
 ```

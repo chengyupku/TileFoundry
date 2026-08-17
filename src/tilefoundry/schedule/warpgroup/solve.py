@@ -30,7 +30,7 @@ SolveStatus = Literal["OPTIMAL", "FEASIBLE_NOT_PROVEN"]
 
 @dataclass(frozen=True, slots=True)
 class WarpgroupSolveResult:
-    """The finite lane program and timing witness produced by M2."""
+    """The finite lane program and timing witness produced by the solver."""
 
     status: SolveStatus
     lanes: tuple[WarpgroupLane, ...]

@@ -1,3 +1,4 @@
-# Examples ship with the repository tag, not with the Python source distribution.
-prune examples
+include LICENSE README.md
 include schemas/*.json
+recursive-include docs *.md
+prune examples

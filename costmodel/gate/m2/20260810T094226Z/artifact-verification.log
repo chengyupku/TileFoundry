@@ -1,6 +1,0 @@
-wheel_sha256=c0402e2e4a850f0f6378834888c41ea66a2a45c8d4cad8126c20fff9933832e3
-base_dependencies=[]
-optional_requirements=6
-m2_sources=source_wheel_bytes_equal
-schemas=7 meta_validation=PASS
-calibration=schema_validation=PASS

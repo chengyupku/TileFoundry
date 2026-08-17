@@ -135,7 +135,6 @@ import tilefoundry.cli
 assert 'tilefoundry.inspection.schedule' not in sys.modules
 assert 'tilefoundry.schedule.warpgroup.serialization' not in sys.modules
 assert 'ortools' not in sys.modules
-assert 'cuda' not in sys.modules
 print('isolated')
 """
     result = subprocess.run(

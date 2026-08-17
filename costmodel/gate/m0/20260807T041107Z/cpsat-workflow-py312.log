@@ -1,5 +1,0 @@
-=== environment ===
-Python 3.12.13
-ortools 9.15.6755
-=== pytest CP-SAT workflow ===
-/private/tmp/tilefoundry-m0-gate-py312-cpsat/bin/python: No module named pytest

@@ -1,1157 +1,131 @@
-# TileFoundry Spec — Schedule
+# Warpgroup Scheduling Contract
 
-Scheduling decides how one Function is placed over one level of the parallel
-hierarchy its Module declares. One public operation names the program and the
-level; one registered algorithm answers with a Plan it owns entirely. What an
-algorithm decides is its own vocabulary: two algorithms placing different
-hardware over different levels do not decide the same things, and a shared result
-schema would either describe neither or force both to pretend.
-
-The public surface ([§1](#1-the-public-schedule-operation)–[§2](#2-public-structures)) is the `schedule` package. The construction stages an
-algorithm composes its solve from ([§4](#4-kernel-schedule-construction)) are imported from their own modules; they
-read [analysis](./analysis.md) facts, and the dependency is one-way — nothing in
-the analysis layer imports the schedule layer.
-
-## 1. The public Schedule operation
-
-```python
-def schedule(
-    module: Module,
-    function: Function,
-    *,
-    topology: str,
-    options: ScheduleOptions | None = None,
-    dims: Mapping[str, int] | None = None,
-) -> ScheduleResult: ...
-```
-
-- constraints:
-  - The caller MUST supply the Module, the Function, and one non-empty topology
-    level name. Nothing about the request MAY be inferred from layouts,
-    constraints, or the shape of the program.
-  - The Function MUST be one the Module owns: one it declares, or a
-    specialization variant of one it declares
-    ([core-ir §1](./core-ir.md#1-module)). A Function derived by specialising one
-    of these MUST be refused, so that ownership is settled before anything is
-    rebuilt.
-  - `dims` states one extent per dimension the Function declares as a range. A
-    solver places work across a level by counting it and holds a tile against a
-    capacity in bytes, so a Function stating a range MUST be solved at a chosen
-    size rather than as authored.
-  - `dims=None` MUST behave as a call that states no size: the Function is
-    solved as authored.
-  - When `dims` is stated it MUST be non-empty; every key MUST name a dimension
-    the Function declares as a range; every value MUST be an integer inside that
-    dimension's declared bounds; every dimension the Function selects a variant
-    on MUST be given a value; and no dimension MAY remain a range after
-    substitution. Each of these MUST fail with a Schedule domain error. A stated
-    `dims` MUST NOT be silently ignored, including when the Function declares no
-    range at all.
-  - Variant resolution and substitution MUST happen after the ownership check
-    and before the algorithm runs. Exactly one variant MUST cover the stated
-    size; none and more than one MUST both fail.
-  - The Target MUST come from `module.resolve_target()`
-    ([core-ir §1](./core-ir.md#1-module)); a call MUST NOT override it and MUST
-    NOT fall back to a default Target when no Module in the owner chain declares
-    one ([target §6](./target.md#6-target-ownership-and-compile-resolution)).
-  - The level MUST be resolved from the Module's own effective hierarchy. A name
-    the hierarchy does not declare MUST fail, and a level whose extent is known
-    only at launch MUST fail: an algorithm places work across a level by counting
-    it.
-  - Target resolution, level resolution, and algorithm resolution MUST all
-    complete before the algorithm runs, so a request that cannot be served never
-    leaves a partial solve behind.
-  - `options=None` MUST mean a fresh default `ScheduleOptions()` for that call.
-  - The returned Plan MUST be verified ([§2.3](#23-scheduleplan)) before the result reaches the
-    caller.
-  - The common Schedule code MUST NOT import a concrete Target implementation.
-
-### 1.1 Algorithm registration
-
-An algorithm is registered for the exact `(concrete Target type, topology name)`
-pair in the shared algorithm registry contract
-([code-organization](./code-organization.md)).
-
-- constraints:
-  - Resolution MUST match both halves of the key exactly. A registration for a
-    base class MUST NOT serve a subclass: two targets that share a base can need
-    different algorithms, and inheriting one would silently run the wrong one.
-  - Registering the same pair twice MUST fail, so which hardware is schedulable
-    at which level is single-valued and readable off the registrations.
-  - A Target MUST NOT own a scheduling method, a scheduling service object, or a
-    `target.schedule()` wrapper. Registration is the only support declaration.
-  - There MUST be no public stage selector, no automatic level selection, and no
-    generic service-lookup facade for scheduling.
-  - An algorithm MUST own its whole problem: its private program view, its Facts
-    query, its constraint problem, its solve, and its Plan type. Those names MUST
-    remain private to the algorithm's own package.
-
-## 2. Public structures
-
-### 2.1 `ScheduleOptions`
-
-`ScheduleOptions` carries solver runtime controls, independent of which
-algorithm runs.
-
-```python
-class ScheduleOptions:
-    """Configure one schedule call.
-
-    Attributes:
-        timeout_seconds: attribute; Wall-clock budget for the underlying solver.
-        workers: attribute; Solver worker count, where zero selects the solver default.
-        random_seed: attribute; Deterministic solver tie-break seed.
-        stop_at_first_solution: attribute; Accept the first result satisfying the
-            constraints instead of searching the budget for the best one.
-        debug_dump_dir: attribute; Directory for algorithm-private artifacts, or None.
-    """
-
-    timeout_seconds: float = 60.0
-    workers: int = 0
-    random_seed: int = 0
-    stop_at_first_solution: bool = False
-    debug_dump_dir: Path | None = None
-```
-
-- constraints:
-  - The structure MUST be immutable.
-  - `debug_dump_dir` MUST affect artifact emission only and MUST NOT change the
-    selected result.
-  - `stop_at_first_solution` MUST change which satisfying result is selected and
-    MUST NOT change what counts as one: a result accepted under it MUST satisfy
-    every constraint a result accepted without it satisfies, so a plan obtained
-    this way is verifiable on the same terms.
-  - `stop_at_first_solution` MUST NOT lift `timeout_seconds`. An algorithm that has
-    found no satisfying result yet stays bounded by it, so the option cannot turn a
-    bounded search into an unbounded one.
-
-### 2.2 `ScheduleResult`
-
-`ScheduleResult` is the complete public result of one call.
-
-```python
-class ScheduleResult:
-    """Carry what was decided, and what it was decided against.
-
-    Attributes:
-        module: attribute; The Module the call was made on.
-        function: attribute; The Function that was scheduled.
-        topology: attribute; The resolved level of that Module's hierarchy.
-        plan: attribute; The verified Plan the selected algorithm produced.
-    """
-
-    module: Module
-    function: Function
-    topology: Topology
-    plan: SchedulePlan
-```
-
-- constraints:
-  - The structure MUST be immutable.
-  - `module` MUST be the same object the caller supplied. Scheduling decides
-    about a program; it MUST NOT return a rewritten Module in its place. An
-    algorithm whose decision *is* a rewritten program MUST carry that program in
-    its own Plan.
-  - When the call states no `dims`, `function` MUST be the same object the
-    caller supplied.
-  - When the call states `dims`, `function` MUST be the concrete Function the
-    plan was solved for, derived from the Function the caller supplied. It MUST
-    record that Function as the one it was specialised from, and the plan MUST
-    verify against it. A caller returned its own symbolic input would hold a
-    plan it cannot check.
-  - `topology` MUST be the level as the Module declares it, not a normalized copy.
-
-### 2.3 `SchedulePlan`
-
-`SchedulePlan` is the extensible semantic base of every algorithm's result. It is
-not a union, a shared schema, or a shared JSON envelope.
-
-```python
-class SchedulePlan:
-    """One solve's decisions, owned by the algorithm that made them."""
-
-    def verify(self, module: Module, function: Function, topology: Topology) -> None: ...
-
-    def to_json(self) -> str: ...
-
-    def render(self) -> str: ...
-```
-
-- constraints:
-  - The base MUST expose exactly these three operations and MUST impose no
-    concrete field, shared schema, or common rendering on a subtype.
-  - The base MUST NOT carry a version field, a deserializer, a renderer registry,
-    or a generic data-export accessor. A Plan is produced by the algorithm that
-    solved for it, in the process that solved; reading one back from text would
-    mean trusting a document to describe decisions nobody made in that run.
-  - A subtype MUST own the whole of its JSON object and the whole of its human
-    rendering.
-  - `verify` MUST be a structural check of the exported plan against the request
-    it answers: that it refers only to things that exist and that its own
-    references agree. It MUST NOT re-solve, invoke a solver, or state anything
-    about whether the schedule is good.
-  - A Plan that does not hold together MUST raise `PlanVerificationError` and MUST
-    NOT reach the caller.
-
-Which hardware documents a decision was made against is the same question
-whatever was decided, so every Plan states it the same way.
-
-```python
-class TargetSpecRef:
-    """Stable identity of the installed target facts one plan relies on.
-
-    Attributes:
-        architecture_id: attribute; Installed architecture document ID, or the architecture's own name.
-        architecture_digest: attribute; Content digest of that document, empty when none was installed.
-        device_id: attribute; Installed device document ID, or the device's own name.
-        device_digest: attribute; Content digest of that document, empty when none was installed.
-    """
-
-    architecture_id: str
-    architecture_digest: str
-    device_id: str
-    device_digest: str
-```
-
-- constraints:
-  - The structure MUST be immutable and MUST be shared by every Plan that names
-    the hardware it relied on, so two plans cannot describe the same target
-    differently.
-  - A Target constructed directly rather than installed from documents MUST state
-    an empty digest rather than a fabricated one.
-
-### 2.4 `PipelineSchedulePlan`
-
-```python
-class PipelineSchedulePlan(SchedulePlan):
-    """Export one closed pipeline schedule."""
-
-    target: TargetSpecRef
-    scaffold: str
-    statements: tuple[ScheduledStatement, ...]
-    buffers: tuple[ScheduledBuffer, ...]
-    holes: tuple[KernelHole, ...]
-```
-
-- constraints:
-  - `target` MUST record architecture and device IDs with their content digests.
-  - Each `ScheduledStatement` MUST carry one stable ID, selected instruction,
-    tile, resource assignment, a half-open interval, the bytes it holds, and
-    whether the level's tile store holds them.
-  - `ScheduledStatement.footprint_bytes` MUST count each buffer the statement
-    touches at the ring depth that buffer was given, so it states what the
-    statement occupies once the pipeline is deep enough to run.
-  - `ScheduledStatement.fits_capacity` MUST record `footprint_bytes` against the
-    tile capacity the level states. A statement that does not fit MUST still
-    appear in the plan: the plan states what the program costs on the target,
-    and a solve MUST NOT drop or shrink a statement to make a plan fit.
-  - Each `ScheduledBuffer` MUST carry one stable ID, storage, positive ring
-    depth, and typed producer and consumer statement IDs.
-  - `ScheduledBuffer.ring_depth` MUST be derived from the dependence distance
-    the buffer carries under the extents of each statement holding it, so that
-    a buffer whose value survives into a later tile is given enough slots to
-    keep the earlier tile alive. A buffer that carries no dependence MUST be
-    given one slot.
-  - Each `KernelHole` MUST reference one stable statement ID and expose tuple
-    inputs, tuple outputs, and serialized ISL relations. It MUST NOT expose an
-    opaque HIR operation reference.
-  - JSON and text rendering MUST be deterministic views of the same decisions.
-  - Plan construction MUST finish Target Facts projection before creating the
-    closed problem. The problem and solve MUST hold no Target object or callback.
-
-The optional one-way projection into the standalone B200 cost model is specified
-in [cost-model §4.2](./cost-model.md#42-tilefoundry-adapter-boundary). The
-existing pipeline scheduler does not invoke that adapter, infer cost-model
-relations from schedule-tree order, or apply a cost-model result to this plan.
-
-### 2.5 `PartitionSchedulePlan`
-
-A partition plan states where each value was placed, which operations run over
-which placements, and what the solve proved. It names both by identities derived
-from the authored program rather than by the indexes its own problem allocated, so
-an agent reading the plan can find what it refers to in the program it wrote.
-
-```python
-class PositionInterval:
-    """The half-open range of parallel positions something occupies.
-
-    Attributes:
-        start: attribute; First position occupied.
-        end: attribute; One past the last position occupied.
-    """
-
-    start: int
-    end: int
-
-class TimeInterval:
-    """One operation's half-open execution interval.
-
-    Attributes:
-        start_ns: attribute; Start of the interval, in ns.
-        end_ns: attribute; One past the end of the interval, in ns.
-    """
-
-    start_ns: int
-    end_ns: int
-
-class PlacedValue:
-    """One tensor value, the type it was placed in, and who touches it.
-
-    Attributes:
-        id: attribute; Stable identity of this placement, derived from the program.
-        type: attribute; The ordinary IR Type selected for it, carrying its layout and storage.
-        producer_id: attribute; The operation that produces it, or None when the plan produces none.
-        consumer_ids: attribute; Every operation that reads it.
-        positions: attribute; The positions this placement occupies.
-    """
-
-    id: str
-    type: Type
-    producer_id: str | None
-    consumer_ids: tuple[str, ...]
-    positions: PositionInterval
-
-class PartitionedOperation:
-    """One operation that runs, where it runs, and when.
-
-    Attributes:
-        id: attribute; Stable identity of this operation, derived from the program.
-        operation: attribute; The operation's own kind.
-        synthesized: attribute; True when the algorithm introduced it rather than the author.
-        input_ids: attribute; The placements it reads.
-        output_ids: attribute; The placements it produces.
-        positions: attribute; The positions it occupies, or None when it occupies none.
-        interval: attribute; Its execution interval, or None when the model gives it none.
-    """
-
-    id: str
-    operation: str
-    synthesized: bool
-    input_ids: tuple[str, ...]
-    output_ids: tuple[str, ...]
-    positions: PositionInterval | None
-    interval: TimeInterval | None
-
-class PartitionProof:
-    """What the solve proved about its own objective.
-
-    Attributes:
-        status: attribute; Whether optimality was proven or only feasibility reached.
-        objective_ns: attribute; The selected makespan, in ns.
-        best_bound_ns: attribute; The bound the solve established, in ns.
-        proven_optimal: attribute; True when the two met.
-    """
-
-    status: Literal["OPTIMAL", "FEASIBLE_NOT_PROVEN"]
-    objective_ns: int
-    best_bound_ns: int
-    proven_optimal: bool
-
-class PartitionSchedulePlan(SchedulePlan):
-    """The placement one partition solve committed to, and its proof."""
-
-    topology: str
-    extent: int
-    target: TargetSpecRef
-    values: tuple[PlacedValue, ...]
-    operations: tuple[PartitionedOperation, ...]
-    root_results: tuple[str, ...]
-    proof: PartitionProof
-```
-
-- constraints:
-  - Every structure MUST be immutable, and the plan MUST state the level it
-    decided about, how many positions of it there were, and the identity of the
-    installed documents it decided against.
-  - An identity MUST be derived from the authored program and MUST be unique
-    within the plan. One value MAY hold more than one placement at once -- that is
-    what a Reshard connects -- so a placement, not a value, is what an identity
-    names.
-  - `PlacedValue.type` MUST be the ordinary IR Type that was selected, so the
-    layout and storage a value was placed in are read off the type system rather
-    than restated in a parallel vocabulary.
-  - An operation the algorithm synthesized MUST appear among `operations`, marked
-    as synthesized, with the placements it moves between. There MUST be no
-    separate route, report, or debug channel through which a caller would learn
-    that data moves.
-  - An operation charged as traffic rather than as occupancy MUST state no
-    position range. Giving it one would claim it excludes other work from those
-    positions, which the decision does not.
-  - `proof` MUST state the objective, the bound the solve established, and whether
-    the two met. It is a result fact and MUST NOT become a generic report facade.
-  - An edge MUST be named the same way from both of its ends: a placement's
-    producer MUST list that placement among its outputs, its consumers MUST list
-    it among their inputs, and every operation's outputs and inputs MUST be
-    reflected back by the placements they name. An edge only one end claims is a
-    claim about a decision nobody made, and a walk that followed it would report a
-    program flow the operations do not implement.
-  - `verify` MUST reject: a level or extent other than the one the plan decided;
-    two placements or two operations sharing an identity; a reference to a
-    placement or operation the plan does not carry; an edge whose two ends
-    disagree; a placement in a type that is not addressable global memory; a synthesized move between two placements that
-    are different logical tensors or that are identical; a position range outside
-    the level; an interval that ends before it starts; two operations holding the
-    same position at the same time; a root result the plan does not carry or
-    cannot reach by following producers; and a bound above the stated objective.
-    It MUST do all of that without rebuilding candidates and without invoking a
-    solver.
-  - JSON and text rendering MUST be deterministic and MUST state the same
-    placements, operations, intervals, and proof.
-  - A solver variable or solver-native value MUST NOT appear in the exported plan.
-  - The plan MUST NOT carry a rewritten program, and producing it MUST NOT rewrite
-    one: a partition decides where work and its tensors go, and applying that
-    decision to HIR is a separate operation the caller asks for.
-
-## 3. Constraint metadata
-
-Hard schedule constraints are represented by one stage-neutral
-`ScheduleConstraintMetadata` record attached to the constrained HIR
-expression. The record contains zero or one `LayoutConstraint`,
-`MeshConstraint`, and `StorageConstraint` value, represented by the existing
-constraint base and source-location fields.
-
-```python
-class LayoutConstraint(ScheduleConstraint):
-    """Fix a physical Layout pattern and ShardAttr bindings."""
-
-    layout: Layout
-    bindings: tuple[tuple[str, ShardAttr], ...]
-
-class MeshConstraint(ScheduleConstraint):
-    """Filter an eventual ShardLayout by one Mesh value."""
-
-    mesh: Mesh
-
-class StorageConstraint(ScheduleConstraint):
-    """Filter a value by one current StorageKind."""
-
-    storage: StorageKind
-```
-
-`LayoutConstraint.layout` is constraint-owned and may contain the private
-wildcard sentinel. Its `bindings` reuse `Split`, `Broadcast`, and `Partial`
-from [shard](./shard.md). A wildcard is never stored as `Layout(None)` and
-never enters a `TensorType.layout`. Metadata is not part of expression
-equality, hashing, or the printed `repr`.
-
-These values are hard filters for later scheduling stages. They carry no
-preferences, candidate rows, costs, solver state, or CTA capability
-decisions, and they do not register a scheduling algorithm for a `CudaTarget`.
-
-## 4. Kernel schedule construction
-
-An algorithm composes its solve from these stages over one
-`TileGraph` ([analysis §1.2](./analysis.md#12-tilegraph)). Each takes the graph
-and returns it enriched; none of them re-derives a fact the analysis layer
-already states.
+TileFoundry schedules one typed SSA loop across a fixed number of warpgroup
+lanes. The core API has three immutable documents:
 
 ```text
-extract(root)  ──▶  build_schedule_tree  ──▶  emit_scaffold
-  (analysis)          tg.tree                 Skeleton / Swimlane / HoleContract
+WarpgroupProgram + CostLibrary -> WarpgroupProblem
+WarpgroupProblem               -> WarpgroupSolveResult
+WarpgroupProblem + SolveResult -> WarpgroupSchedule -> independent verify
 ```
 
-Each stage lives in its own module of the `schedule` package and is imported
-from there; the compact public package surface ([§1](#1-the-public-schedule-operation)–[§2](#2-public-structures)) carries the public
-operation and its results only.
+The solver never calls a profiler, target object, device runtime, or record
+store. Every cost and resource fact is numeric before solving begins.
 
-| Stage | Signature | Error |
-|---|---|---|
-| tree construction | `build_schedule_tree(tg: TileGraph) -> TileGraph` | `KernelScheduleError` |
-| scaffold emission | `emit_scaffold(tg: TileGraph) -> tuple[Skeleton, Swimlane, list[HoleContract]]` | `EmitScaffoldError` |
+## Documents
 
-### 4.1 Tree construction
+JSON decoders reject unknown fields, malformed identifiers, invalid expression
+arity, ill-typed operations, duplicate SSA definitions, undefined values, and
+invalid loop-carried state. The schemas under `schemas/` define structural
+syntax; typed decoders own cross-record semantics.
 
-```python
-def build_schedule_tree(tg: TileGraph) -> TileGraph: ...
+Supported formats are:
 
-def schedule_bands(tree: "isl.schedule") -> tuple["isl.schedule_node_band", ...]: ...
+| Document | Formats | Purpose |
+| --- | --- | --- |
+| Program | v1, v2 | Typed semantic operations; v2 fixes operation ownership |
+| Problem | v1, v2, v3 | Closed costs/resources; v2 adds asynchronous timing, v3 fixes ownership |
+| Schedule | v1, v2, v3 | Lane order, synchronization edges, and timing witness |
 
-def band_statement(band: "isl.schedule_node_band") -> str: ...
+Problem and schedule versions pair exactly. No decoder guesses or silently
+migrates a version. v1 remains the synchronous compatibility form; v2/v3 use
+explicit issue and completion timing.
 
-def tile_band(band: "isl.schedule_node_band", sizes: tuple[int, ...]) -> "isl.schedule": ...
+## Program
 
-def tile_bands(tree: "isl.schedule", sizes: dict[str, tuple[int, ...]]) -> "isl.schedule": ...
+A program contains `format`, `warp_groups`, `types`, `inputs`, and `loop`.
+Each operation contains an ID, typed SSA outputs, expression trees, and in v2 a
+fixed `warp_group`. Input order and operation order have no scheduling meaning.
 
-class KernelScheduleError(RuntimeError):
-    """A schedule tree the band operations cannot work on."""
-```
+Expressions cover constants, references, indexing, copies, casts, transpose,
+concatenation, selection, elementwise arithmetic, reductions, exponentials,
+and matrix multiplication. Type checking includes shape, dtype, memory space,
+axis validity, and index bounds.
 
-- constraints:
-  - Nothing in this stage solves. The tree MUST be **constructed** from the
-    statement order the analysis layer already reports: one identity band per
-    statement, sequenced in `tg.units` order. That order respects every
-    dependence, so the result is legal by construction.
-  - An affine scheduling solve MUST NOT be introduced here, and no objective MAY
-    be smuggled in from isl's own schedule constraints: its
-    dependence-distance goal is not the one this layer decides for.
-  - The statements MUST NOT be fused into one band: their ranks differ, so one
-    padded shared band member would mean a different loop in each of them.
-  - Each band's `coincident` members MUST be written from
-    `tg.parallel_dims` ([analysis §1.7](./analysis.md#17-parallel-dimensions)) —
-    the flags are read, never recomputed.
-  - `build_schedule_tree` MUST return `tg` with `tree` filled in and every other
-    field unchanged. An empty `tg.units`, or a unit with no matching piece of
-    `tg.domain`, MUST raise `KernelScheduleError`.
-  - `schedule_bands` MUST return every band of the tree in top-down order, which
-    for a constructed tree is `tg.units` order, and MUST raise when the tree
-    carries no band.
-  - `band_statement` MUST raise unless the band belongs to exactly one
-    statement.
-  - `tile_band` MUST split one band into a tile band over `sizes` plus a point
-    band holding the remainder. A size count that does not match the band's
-    member count, or a size below `1`, MUST raise.
-  - `tile_bands` MUST tile every band by its own statement's sizes and MUST
-    raise for a statement with no decided size.
+Dependencies are derived from SSA definitions and uses. They are not a second
+authored edge list. Loop `iter_args` give the initial value and the SSA value
+yielded to the next iteration.
 
-### 4.2 Scaffold emission
+## Cost Closure
 
-`emit_scaffold` renders the decided tree into what an authoring agent fills: a
-holed loop nest, a human-readable swimlane, and one hole contract per statement.
+`OperationSignature` is derived from the complete expression forest and typed
+operands/results. It preserves cost-relevant operators, constants, axes,
+aliasing, shape, dtype, and memory space while erasing operation IDs, SSA
+spelling, loop-index spelling, and type aliases.
 
-```python
-class Skeleton:
-    """A holed, C-like loop-nest skeleton.
+`build_warpgroup_problem` performs one exact lookup per distinct signature.
+Missing signatures are reported together; ambiguous entries are rejected. A
+failed build never returns a partial problem.
 
-    Attributes:
-        text: attribute; The generated loop nest, with one hole call per statement instance.
-        holes: attribute; Every hole name in text, in first-appearance order.
-    """
+## Timing and Resources
 
-    text: str
-    holes: tuple[str, ...]
+For asynchronous problems every operation has:
 
-class Swimlane:
-    """A human-readable rendering of the decided schedule.
+- `issue_duration`: lane occupancy after start;
+- `completion_latency`: time until outputs are ready;
+- `resource_windows`: resource, amount, start offset, and duration.
 
-    Attributes:
-        text: attribute; One Mermaid gantt section per statement, minimally unrolled.
-    """
+Lane `NoOverlap` applies to issue intervals. SSA visibility and shared-memory
+lifetime use completion. Resources use cumulative capacity over their declared
+windows. The objective is the maximum completion time of the finite requested
+prefix.
 
-    text: str
+v1 `duration` means equal issue and completion timing with full-duration
+resource windows. Encoding a genuinely asynchronous document as v1 is an
+error.
 
-class BufferAccess:
-    """One buffer touched by one statement.
+## Memory Semantics
 
-    Attributes:
-        tensor_name: attribute; Buffer tuple name, as the TileGraph names it.
-        index_map: attribute; Access map from this statement's coordinates to that buffer's elements.
-        dtype: attribute; Recovered HIR element DType, or None when it could not be resolved.
-    """
+Register values are lane-local: a definition and every use belong to one
+warpgroup. Shared values may cross lanes after a completion-to-start
+synchronization path. A computed register value reaches shared memory only
+through an explicit copy operation.
 
-    tensor_name: str
-    index_map: "isl.map"
-    dtype: object | None
+Each shared SSA definition is one logical allocation reused at the same body
+position. Before iteration `i` overwrites it, every use from iteration `i - 1`
+must complete. External shared initialization is ready at the iteration-zero
+boundary, so the first consumer may overlap the first publication.
 
-class HoleContract:
-    """What one hole must compute.
+## Periodic Fixed-Owner Search
 
-    Attributes:
-        name: attribute; The hole's own call name in the skeleton.
-        op_ref: attribute; The HIR Call this hole stands for.
-        inputs: attribute; Every buffer the statement reads, in source-call argument order.
-        output: attribute; The single buffer the statement writes.
-        coords: attribute; The schedule coordinates the hole is parametrised by.
-    """
+Problem v3 uses a compact periodic model:
 
-    name: str
-    op_ref: object
-    inputs: tuple[BufferAccess, ...]
-    output: BufferAccess
-    coords: tuple[str, ...]
+- one prologue start per operation;
+- one body start offset per operation;
+- one global positive initiation interval;
+- one cyclic issue order per fixed warpgroup.
 
-def emit_scaffold(tg: TileGraph) -> tuple[Skeleton, Swimlane, list[HoleContract]]: ...
+For body iterations `i >= 1`, `start(i, op) = offset(op) + i * II`. Periodic
+resource conflicts are checked with the finite set of neighboring copies that
+can overlap a static resource window, so CP-SAT model size does not grow with
+the requested iteration count. Materialized output still contains one timing
+row per operation per requested iteration.
 
-class EmitScaffoldError(RuntimeError):
-    """A construct emit_scaffold does not render, or a TileGraph precondition that did not hold."""
-```
+The last requested iteration uses omitted-final-successor semantics. It is a
+finite body row, not an independently searched epilogue.
 
-- constraints:
-  - Every structure MUST be immutable.
-  - The skeleton MUST be isl code generation over `tg.tree`, with each naked
-    statement call replaced by its hole call. `tg.tree is None` MUST raise
-    `EmitScaffoldError`.
-  - A hole call MUST name its inputs, its output, and its raw schedule
-    coordinates, each behind its own marker, so the three groups are
-    distinguishable without re-deriving them.
-  - A read-modify-write self-read on the output buffer MUST appear among the
-    inputs rather than be silently dropped.
-  - A buffer whose decided ring depth is above `1` MUST be referenced through
-    that ring, indexed by the innermost coordinate modulo the depth. Before atom
-    selection has run `tg.ring` is empty, and every reference MUST then be the
-    bare buffer name.
-  - Exactly one `HoleContract` MUST be produced per statement, not per call site
-    in the generated text, and its `coords` MUST come from the first occurrence.
-  - A statement whose name has no matching `TileUnit`, or that writes more than
-    one buffer, MUST raise `EmitScaffoldError`.
-  - A hole whose statement call cannot be placed in the generated text MUST raise
-    rather than be dropped.
-  - `HoleContract` MUST be a pure function contract — inputs, output, coordinates
-    — and MUST NOT carry indexing or synchronization: the skeleton already
-    carries those. `op_ref` MUST be the HIR `Call`, so a later stage can fill the
-    hole and diff it against the [evaluator](./evaluator.md)'s own result for
-    that op subgraph.
-  - The swimlane MUST be minimally unrolled — a prologue instance, a handful of
-    steady-state instances, and an epilogue instance, with the elided count
-    stated — never the full iteration count: a real kernel's domain runs to
-    hundreds of millions of points.
+Optimization is lexicographic: finite makespan, then II, then stable starts,
+offsets, and lane-order encoding. If a later optimization stage reaches the
+deadline, the last proven witness is returned as `FEASIBLE_NOT_PROVEN`.
 
-## 5. Scheduling facts
+## Schedule and Verification
 
-The polyhedral model is target-independent; the atom catalogue, the rates work is
-charged at, and the store a tile lives in are not. Each algorithm family declares
-the facts it needs as its own aggregate, so what one family asks for cannot become
-a shared vocabulary another family has to satisfy. All of them are obtained by
-projecting the Target ([target §11](./target.md#11-target-facts-projection)), so
-an algorithm names the facts it needs and never calls into a target through an
-object whose shape it must know.
-
-The level an algorithm is asked about and the level whose store bounds it need not
-be the same one, and a projection MUST NOT collapse them. An AMX core both runs
-the work and owns the L1d its tile lives in. A CUDA pipeline is asked about
-`thread`, because what it decides is how the threads of one CTA overlap their
-work, but the store they cooperate in is shared memory, which is a CTA-scoped
-resource: reporting that capacity as a per-thread number would claim a limit no
-hardware publishes.
-
-### 5.1 `AtomFact`
-
-```python
-class AtomFact:
-    """One candidate atom's facts, as the deciding stage consumes them.
-
-    Attributes:
-        shape: attribute; The atom's own M, N and K extents.
-        dtype: attribute; The atom's own a, b and c operand DTypes.
-        duration: attribute; Nominal roofline estimate for one instance, in ns.
-        compute_duration: attribute; The compute-side half of that estimate alone, in ns.
-        storage: attribute; Per-role fragment occupancy in bytes.
-        resource: attribute; Required thread-scope footprint, keyed by scope name.
-        is_async: attribute; True when the instruction is asynchronous.
-        atom: attribute; The target's own realized atom descriptor, carried through opaquely.
-    """
-
-    shape: tuple[int, int, int]
-    dtype: tuple[DType, DType, DType]
-    duration: float
-    compute_duration: float
-    storage: dict[str, int]
-    resource: dict[str, int]
-    is_async: bool
-    atom: object
-```
-
-- constraints:
-  - The structure MUST be immutable and MUST stay target-independent: `atom`
-    MUST be kept opaque, so a target package can enumerate its own catalogue
-    without this type knowing that catalogue's types.
-  - `shape` / `dtype` MUST mirror the atom's own shape and operand dtypes, so a
-    consumer can filter and granularise without unpacking `atom`.
-  - `duration` MUST be a nominal estimate in ns for **one** atom instance, and
-    `compute_duration` MUST be its compute-side half alone — for a consumer that
-    models the surrounding traffic itself and would otherwise charge memory
-    twice.
-  - `atom` MUST be the realized descriptor a later fill or codegen stage needs,
-    so that stage never re-resolves it from `shape` / `dtype`.
-
-### 5.2 `PartitionFacts`
-
-```python
-class PartitionFactsQuery:
-    """The one topology level a projection is asked to describe.
-
-    Attributes:
-        topology: attribute; The level being divided.
-    """
-
-    topology: str
-
-class PartitionFacts:
-    """All concrete hardware information required to close one partition.
-
-    Attributes:
-        topology: attribute; The level being divided.
-        spec: attribute; Identity of the installed documents these numbers came from.
-        parallel_units: attribute; How many positions of that level the plan may occupy.
-        memory_bandwidth_bytes_per_second: attribute; The rate traffic is charged at.
-        memory_capacity_bytes: attribute; The capacity resident bytes are charged against.
-        peak_flops_per_second: attribute; Dense peak rate per compute DType.
-    """
-
-    topology: str
-    spec: TargetSpecRef
-    parallel_units: int
-    memory_bandwidth_bytes_per_second: int
-    memory_capacity_bytes: int
-    peak_flops_per_second: tuple[tuple[DType, int], ...]
-
-    def peak_flops(self, dtype: DType) -> int: ...
-```
-
-- constraints:
-  - The structure MUST be immutable and MUST contain every numerical fact the
-    closed problem and its solve consume. After it is projected, neither the
-    problem nor the solve MAY hold a Target, follow one through the program, or
-    invoke a projection again.
-  - A capacity MUST be stated once here rather than copied onto each candidate: a
-    candidate states the demand it makes, and what that demand is compared against
-    belongs to the hardware.
-  - A DType the hardware publishes no rate for MUST fail rather than resolve to
-    zero or to a neighbouring rate. Charging work at a rate no document supports
-    would put an unsupported number in the plan.
-  - A level the target does not divide MUST be reported as that, and the algorithm
-    MUST surface it as its own scheduling diagnostic rather than let a projection
-    failure escape.
-  - Compiler policy MUST stay in `ScheduleOptions`, not in these facts: what the
-    hardware is does not depend on how aggressively the compiler was asked to
-    schedule it.
-
-## 6. Warpgroup scheduling documents
-
-Warpgroup scheduling has three versioned, kernel-independent document
-boundaries. `WarpgroupProgram` is authored semantic work,
-`WarpgroupProblem` is the same work closed to integer costs, and
-`WarpgroupSchedule` is one successful lane and timing result. They are not
-`SchedulePlan` subtypes and do not change the HIR pipeline or partition
-scheduler boundaries above.
-
-All three documents use strict JSON: every object rejects unknown fields, every
-array item has one declared shape, and every identifier is a non-empty ASCII
-string. SSA identifiers begin with `%`. Decoding and direct Python construction
-MUST produce the same frozen records, tuples, enums, expressions, and scalar
-literals. A typed record MUST NOT retain a caller-owned mapping, list, or opaque
-object. Canonical JSON sorts object keys and all semantically unordered
-collections, uses compact separators, and contains no non-finite JSON number.
-
-Validation has three explicit layers. The JSON Schemas validate JSON structure,
-closed property sets, scalar domains, expression arity, and the portable ASCII
-identifier grammar. They do not claim constraints across separate records. The
-decoder and immutable model enforce cross-field type, ID, SSA, expression,
-loop-phi, schedule-local uniqueness, and interval semantics. The independent
-schedule verifier consumes a problem and schedule together and is responsible
-for operation coverage, durations, dependencies, lane locality, resources,
-synchronization reachability, shared-allocation reuse, and acyclicity.
-
-### 6.1 `WarpgroupProgram`
-
-The authored document has format `tilefoundry.warpgroup_program.v1` or
-`tilefoundry.warpgroup_program.v2` and exactly these top-level fields:
-
-| Field | Meaning |
-| --- | --- |
-| `format` | Selects this program grammar. |
-| `warp_groups` | Gives the positive number of warp groups. In v1 these are anonymous lanes; in v2 they are ownership indices. |
-| `types` | Maps type IDs to `shape`, `dtype`, and `space`. |
-| `inputs` | Declares SSA values defined outside the loop body. |
-| `loop` | Gives one explicit finite loop. |
-
-The program MUST NOT contain time units, durations, resource capacities,
-operation resource demands, synchronization, an objective, phases,
-implementations, target roles, warp IDs, tile IDs, barrier data, or an explicit
-dependency field. Program v1 has no lane assignment; program v2 has only the
-per-operation `warp_group` ownership field defined below. Neither `inputs`
-order nor `loop.ops` order has scheduling meaning.
-
-A loop has exactly `index`, `iterations`, `iter_args`, and `ops`.
-`iterations` is positive. The index is an implicit integer scalar and is not a
-declared tensor type. Each iter arg has exactly `id`, `init`, and `yield`:
-`yield` names a loop-body SSA definition, the iter arg has that definition's
-type, and the yielded value becomes the iter arg in the next iteration. `init`
-is either an external SSA value of exactly that type or a scalar literal
-broadcast to the yielded tensor shape.
-
-An authored operation in program v1 has exactly `id` and `outputs`. Program v2
-adds exactly one field, `warp_group`, which is a non-negative integer smaller
-than the program's `warp_groups`. Each output has exactly
-`id`, `type`, and `expr`. Multiple outputs of one operation are atomic at this
-boundary. IDs, input SSA definitions, iter args, and output SSA definitions are
-unique across their applicable namespaces. Every use and yield MUST resolve
-independently of array order, and the complete output-expression graph MUST be
-acyclic. Operation dependencies are the canonical SSA def-use relation: a body
-definition to a body use has distance zero, while a yielded definition to a
-next-iteration iter-arg use has distance one. This relation is derived and is
-never serialized as a program field.
-
-### 6.2 Types and expressions
-
-Tensor shapes contain positive integer extents. The supported storage spaces
-are exactly `register`, `shared`, and `global`:
-
-- `register` is local to the warpgroup lane that eventually owns its def-use
-  component.
-- `shared` may cross warpgroup lanes and each loop-body shared definition is
-  one logical allocation reused at the same body position in later iterations.
-- `global` is external storage and therefore may be referenced by inputs but
-  MUST NOT be defined by a loop-body output.
-
-The supported dtypes are `i1`, signed and unsigned 8/16/32/64-bit integers,
-`fp8_e4m3fn`, `fp8_e5m2`, `fp16`, `bf16`, `fp32`, and `fp64`. Expressions use
-JSON arrays whose first item is one of these operators:
-
-| Form | Static type rule |
-| --- | --- |
-| `["index", source, index, ...]` | Removes one leading source dimension per index; static indices and the finite loop-index range MUST be in bounds. |
-| `["copy", value]` | Preserves shape and dtype; the declared output selects the destination space. |
-| `["cast", value]` | Preserves shape and space; the declared output selects the destination dtype. |
-| `["matmul", lhs, rhs]` | Requires rank-two matching contracting dimensions and matching input dtypes; the declared output gives the result/accumulation dtype and MUST remain in the operands' floating or non-boolean integer family. |
-| `["transpose", value]` | Requires rank two and exchanges the two extents. |
-| `["concat", axis, value, ...]` | Requires at least two equal-rank operands with matching dtype, space, and non-axis extents. |
-| `["select", condition, true, false]` | Requires an `i1` condition and singleton-broadcastable result values. |
-| `["reduce", operator, axis, value]` | Supports `sum` and `max`, keeps the reduced axis with extent one, and requires an in-range axis. |
-| `["add", value, ...]`, `["mul", value, ...]`, `["max", value, ...]` | Require at least two same-dtype operands with ordinary trailing singleton broadcasting. |
-| `["sub", left, right]` | Requires exactly two same-dtype singleton-broadcastable operands. |
-| `["exp", value]` | Requires exactly one floating operand and preserves its broadcast shape and dtype. |
-
-Finite JSON numbers are scalar literals. The string `"-inf"` is the sole
-non-finite scalar token and is valid only for a floating result. A scalar may
-broadcast to any tensor shape. Every computed operator other than `copy` and
-`cast` produces a register value. Shape, dtype, space, index, axis, and
-broadcast errors MUST be rejected while constructing the program or problem.
-This is a kernel-independent scheduling rule: computation first materializes a
-lane-local register value, and publication to `shared` storage requires an
-explicit `copy` output whose def-use may cross lanes.
-
-### 6.3 `WarpgroupProblem`
-
-Closed documents use `tilefoundry.warpgroup_problem.v1`,
-`tilefoundry.warpgroup_problem.v2`, or `tilefoundry.warpgroup_problem.v3`. All
-versions have exactly these top-level
-fields:
-
-| Field | Meaning |
-| --- | --- |
-| `format` | Selects this problem grammar. |
-| `time_unit` | Gives one ASCII identifier for every timing value and timestamp. |
-| `warp_groups` | Carries the authored positive lane bound. |
-| `resources` | Maps temporal-resource IDs to positive integer capacities. |
-| `types` | Carries the validated semantic type table. |
-| `inputs` | Carries the validated external SSA definitions. |
-| `loop` | Carries the same finite loop with closed operation costs. |
-
-Version 1 retains its synchronous meaning. Each operation has exactly `id`,
-`outputs`, `duration`, and `resources`; every value is a positive integer. It
-normalizes to `issue_duration == completion_latency == duration`, and each
-resource demand normalizes to one window with `start_offset = 0` and window
-`duration` equal to the operation duration. Encoding version 1 MUST reject an
-asynchronous operation or a different resource window rather than lose it.
-
-Version 2 replaces the two legacy cost fields with exactly
-`issue_duration`, `completion_latency`, and `resource_windows` alongside `id`
-and `outputs`. Both timing values are positive integers and
-`completion_latency >= issue_duration`. Equality represents a synchronous
-operation. No asynchronous boolean, operation role, instruction class, or
-hardware-specific operation tag is present.
-
-Version 3 has the version-2 timing fields and adds exactly one required
-`warp_group` field to every operation. It is a non-negative integer less than
-`warp_groups`; it is the operation's fixed execution owner. Build copies this
-value from program v2 without interpretation. A v3 solver searches only
-lane-local order and timing inside each declared group, and a v3 schedule keeps
-lane index `i` equal to input group `i`, including empty groups. Legacy versions
-retain anonymous placement search and do not accept an ownership field.
-
-The fixed-owner v3 finite solver uses a compact periodic body with finite
-boundaries. Its CP-SAT decision values are one positive initiation interval
-`II`, one body `start_offset(op)` and one prologue start per static operation,
-and one cyclic lane-local order for each fixed warp group. It does not create a
-separate operation timing decision for every periodic body iteration. The
-requested finite prefix is materialized after solving using the derived
-formulae in [§6.5](#65-warpgroupschedule), preserving the existing v3 JSON
-boundary.
-
-Each resource window has exactly `resource_id`, positive integer `amount`,
-non-negative integer `start_offset`, and positive integer `duration`. It owns
-the half-open interval
-`[operation.start + start_offset, operation.start + start_offset + duration)`.
-The interval MUST end no later than `operation.start + completion_latency`,
-name one declared capacity, and not exceed that capacity. Multiple explicit
-windows may name the same resource. Resource use MUST NOT be inferred from an
-operation kind, instruction name, workload role, or profiling field.
-
-The problem contains all numeric facts consumed by a finite solver, but no
-callback, Target, CUDA value, profile store, implementation catalog, OR-Tools
-object, objective field, explicit dependency field, searched lane assignment,
-synchronization, or hardware role. Version 3 may carry the fixed per-operation
-`warp_group` ownership described above; it is input data, not a solver variable.
-
-Program-to-problem cost closure is a separate operation. Constructing or
-decoding either document performs only the static type, SSA, loop, storage, and
-numeric validation described here. It does not assign a lane, emit a
-synchronization relation, or choose operation times.
-
-### 6.4 Cost closure
-
-`build_warpgroup_problem(program, cost_library)` is the sole program-to-problem
-closure. The library declares one ASCII `time_unit`, immutable positive integer
-resource capacities, and an exact lookup from `OperationSignature` to one
-positive integer issue duration, one positive integer completion latency, and
-immutable explicit resource windows. There is no default, estimated, nearest,
-or fallback cost. Legacy synchronous costs normalize according to the version-1
-rule above; asynchronous costs or non-legacy windows require a version-2 or
-version-3 problem.
-
-An `OperationSignature` has exactly these semantic fields:
-
-| Field | Meaning |
-| --- | --- |
-| `kind` | One of `compute`, `view`, or `copy`; `index`, `transpose`, and `concat` are views, explicit `copy` is copy work, and casts and arithmetic are compute work. |
-| `operands` | First-use-ordered input value types, each containing only shape, dtype, and memory space. |
-| `outputs` | An identity-free ordered forest of complete expression trees paired with every output shape, dtype, and memory space. |
-
-Expression trees preserve operators, constants, axes, static indices, loop-index
-positions, operand aliasing, and nested output references. They replace external
-SSA uses with positional references and replace the loop-index spelling with one
-semantic token. Output ordering is canonical by typed expression content. An
-operation ID, SSA spelling, loop-index spelling, type alias, or kernel role MUST
-NOT affect the signature. Any change to an operator, constant, axis, shape,
-dtype, memory space, operand aliasing relation, or output set MUST affect it.
-
-One build queries each distinct signature once. Missing exact signatures are
-collected and reported together, while an ambiguous exact entry fails
-immediately. Either every operation closes or no `WarpgroupProblem` is returned.
-On success, the builder copies all timing values, windows, capacities, and the
-time unit into immutable problem records. The returned problem retains no
-library, callback, Target, CUDA value, profile store, standalone costmodel
-object, or unresolved signature.
-
-TileProf cycle measurements used for closure MUST be finite and positive.
-Conversion to the integer problem grid uses `ceil`; truncation and nearest
-rounding are forbidden. Each original absolute timing field is rounded
-independently before derived differences are checked; it MUST NOT be recreated
-by first splitting, subtracting, or adding other timing fields. A caller MUST
-explicitly select the primary statistic; there is no default p50 or p90.
-Sensitivity uses a separate closed problem and separate solve for each
-statistic, never mixed statistics within one problem. Mapping an external
-artifact to resource windows is a separate explicit, versioned target contract.
-A missing timing, quantization, statistic, or resource mapping fails closure.
-
-### 6.5 `WarpgroupSchedule`
-
-A successful document has format `tilefoundry.warpgroup_schedule.v1`,
-`tilefoundry.warpgroup_schedule.v2`, or `tilefoundry.warpgroup_schedule.v3`.
-All versions have exactly four top-level fields: `format`, `lanes`, `sync`, and
-`times`.
-
-`lanes` is an array of ordered operation-ID arrays, one per warpgroup. In v1/v2
-the lanes are anonymous solver output; in v3 lane index `i` is the fixed input
-ownership group `i`, and empty groups remain present. `sync` contains unique
-records with exactly `after`, `before`, and a
-non-negative loop `distance`. A record states completion-to-start ordering:
-`completion(i, after) <= start(i + distance, before)` whenever the destination
-iteration is in range. For version 1, `completion` is its legacy `end` value. A
-distance-zero self edge is invalid.
-
-Each version-1 `times` row remains exactly
-`[iteration, operation_id, start, end]` and normalizes to equal issue end and
-completion. Each version-2 and version-3 row is exactly
-`[iteration, operation_id, start, issue_end, completion]`. Iteration and start
-are non-negative integers, issue end is `start + issue_duration`, and
-completion is `start + completion_latency`. Duplicate timed instances are
-invalid. A row does not repeat a lane, and the document does not repeat a
-derived makespan or add status, proof, barriers, phases, implementations,
-hardware roles, or profile provenance.
-
-The finite solver uses `[start, issue_end)` for lane `NoOverlap` and for the
-fixed body order within and across loop iterations. SSA, loop-carried, shared
-lifetime, and explicit synchronization relations use producer completion.
-Each declared resource window is placed at its explicit offset and checked
-against its declared capacity. The objective is the maximum completion over
-all finite operation instances. Consequently, independent asynchronous
-operations may issue consecutively on one lane while their completion ranges
-overlap.
-
-For problem v3, iteration zero is a finite prologue with one independently
-searched start per operation. It consumes the external loop init and is not
-forced to have the body's relative timing. Materialized iterations `i >= 1`
-use the compact periodic body:
-
-```text
-start(i, op) = start_offset(op) + i * II
-```
-
-`issue_end` and `completion` are derived from the selected start and the
-operation's issue duration and completion latency. Dependencies originating in
-the prologue are constrained directly against their finite destination.
-Dependencies between body iterations use offset relations; for example, a
-distance-one relation uses `completion_offset(after) <= start_offset(before) +
-II` only when that body successor exists in the requested prefix. A carried
-shared overwrite applies to iterations `i >= 1`, while the prologue's external
-init user is free to overlap that iteration's body definition. The final
-iteration has no successor-use requirement. No conditional sync record or new
-serialized boundary field is introduced.
-
-For each lane, the selected cyclic order enforces both adjacent issue windows
-within a period and the last-to-first wrap inequality
-`issue_end_offset(last) <= start_offset(first) + II`. The finite objective is
-the maximum of every prologue completion and
-`start_offset(op) + (N - 1) * II + completion_latency(op)` for a non-empty
-body. Minimizing `II` alone is insufficient because it leaves finite prologue
-and body phases unconstrained and can select a larger finite makespan. The
-solver therefore minimizes finite makespan first and `II` second. After fixing
-both values, it deterministically minimizes, in order, the canonical sum of
-prologue starts, the canonical sum of body offsets, and the stable lane-order
-encoding built from sorted operation IDs. Stable model construction, one
-search worker, and a fixed random seed resolve any remaining equivalent
-witnesses. If the tie-break cannot be proven within the solve timeout, the
-result is not reported as optimal.
-
-Every declared resource window in the finite prologue participates in a finite
-capacity constraint. The periodic body is checked independently as an infinite
-repetition. Let `H` be the static upper bound on every unshifted body-window
-end, and let `L` be the static positive lower bound on `II`. To check one
-representative interval `[0, II)`, it is sufficient to include the
-conservative shift range
-
-```text
--ceil(H / L) <= k <= 0
-```
-
-for every body window. A shift `k >= 1` starts no earlier than `II`; a shift
-below that lower bound ends no later than zero. Every capacity violation in the
-infinite repetition translates by an integer multiple of `II` into the
-representative interval, and every included interval is a real periodic copy.
-This finite `Cumulative` model therefore covers period-boundary overlap and
-self-overlap across more than one preceding period without a bound derived from
-the requested iteration count. The same static bound limits the positive body
-copies that can overlap a prologue window, because every prologue-window end is
-also at most `H`. Prologue interaction does not include nonexistent negative
-body periods.
-
-This construction applies unchanged to arbitrary positive capacity, amount,
-window offset, and window duration; resource behavior is still entirely
-explicit problem data. The independent verifier checks the windows present in
-the materialized finite prefix. It does not reconstruct or re-solve the
-infinite periodic resource proof.
-
-When a v3 prefix contains at least two body instances, the verifier derives
-`II` from iterations one and two and requires the same positive start delta for
-all later body pairs. The prologue-to-body delta is intentionally exempt. With
-only one body instance, `II` is not recoverable from the serialized finite
-schedule; lane, dependency, shared-lifetime, synchronization, resource, and
-finite timing checks still apply. The final row currently remains a periodic
-body row with its successor requirement omitted. This omitted-final-successor
-prefix is the selected finite boundary semantics; an independently searched
-peeled epilogue is not part of this contract.
-
-The schedule decoder and model reject malformed IDs, repeated operations across
-lanes, duplicate synchronization edges or timed instances, distance-zero self
-edges, and non-positive intervals. Constraints that require the closed problem,
-including operation coverage, issue/completion timing, dependency and lane locality,
-synchronization reachability, resource feasibility, shared-allocation reuse,
-and acyclicity, belong to the independent schedule verifier.
-
-`export_warpgroup_schedule(problem, result)` is the sole finite-result export.
-It copies the solved lanes and times, derives synchronization candidates only
-for completion-to-start semantic relations: SSA def-use, loop-carried
-dependencies, and shared handoff or uniformly expressible allocation reuse. It
-omits a relation only when the finite completion-capable
-lane/synchronization path already proves that relation; register and same-lane
-relations are not special cases.
-For a loop-carried shared iter arg, the external `init` is ready at the loop
-boundary: its users in iteration zero need not precede or follow that
-iteration's body definition. In every iteration `i >= 1`, all users of the
-value yielded by iteration `i - 1` MUST complete before the same logical
-allocation is redefined in iteration `i`; the normal yielded-definition to
-next-iteration-user SSA relation also remains in force. Because the compact
-sync record applies uniformly to every in-range iteration, the conditional
-`i >= 1` overwrite relation is a problem-aware finite semantic edge rather
-than a synchronization candidate or a new sync-record variant.
-Lane adjacency and the last-to-first edge between consecutive iterations are
-implicit control edges. A synchronization candidate may be removed only when
-every one of its finite expanded instances remains reachable through those lane
-edges and the other emitted synchronization records. The candidate being
-removed, an unexported solver order, or an unexported cross-lane SSA edge MUST
-NOT be used to prove that candidate redundant. Completion reachability uses an
-event graph with `start -> issue_end`, `issue_end -> completion`, lane
-`issue_end -> next start`, and synchronization
-`completion -> destination start` edges. A synchronous operation also has the
-reverse `completion -> issue_end` equality edge. An asynchronous operation has
-no such reverse edge, but its `start -> issue_end` path may still propagate an
-already-established upstream completion fact to the next lane operation.
-
-`verify_warpgroup_schedule(problem, schedule)` is independent of the solver and
-MUST NOT import or invoke OR-Tools. It checks exact operation and finite-instance
-coverage, declared issue durations and completion latencies, fixed lane issue
-order within and across iterations,
-register locality, all SSA and shared completion-before-start relations,
-completion reachability through lane and synchronization edges, shared-allocation reuse,
-synchronization inequalities, resource capacities, and acyclicity of the finite
-lane, synchronization, and semantic graph. This includes the conditional
-carried-shared overwrite edge for each iteration `i >= 1`, without imposing it
-on the boundary-ready iteration-zero init. Verification does not reconstruct a
-schedule, trust times as the control relation, or accept an unknown operation,
-extra time row, duplicate instance, or out-of-range iteration.
-
-The verifier pairs versions exactly: problem v1 with schedule v1, problem v2
-with schedule v2, and problem v3 with schedule v3. Every other combination is
-invalid; no decoder or verifier path silently migrates a schedule format.
-
-### 6.6 End-to-end workflow
-
-`schedule_warpgroups(source, cost_library=None, *, timeout_seconds=60.0)` is the
-single combined Python workflow. With an exact `WarpgroupProgram`, it requires
-a cost library and performs cost closure before solving. With an exact already
-closed `WarpgroupProblem`, it rejects a cost library and solves the replayable
-numeric document directly. Other root types are invalid. Both paths call the
-same finite solver, synchronization exporter, and independent verifier; no
-partial schedule is returned after an error.
-
-The immutable `WarpgroupScheduleResult` contains the existing solve status, the
-verified `WarpgroupSchedule`, and a makespan derived from the maximum schedule
-completion time. It retains no library, callback, Target, CUDA value, profile store,
-OR-Tools model, or solver object. Importing the typed or combined boundary does
-not load OR-Tools; only an actual solve crosses that lazy backend boundary.
-
-The `tilefoundry schedule` command retains its authored-HIR form:
-
-```text
-tilefoundry schedule SOURCE --topology LEVEL
-```
-
-It additionally accepts exactly one explicit warpgroup JSON path:
-
-```text
-tilefoundry schedule --warpgroup-program PROGRAM.json --fixture-costs
-tilefoundry schedule --warpgroup-problem PROBLEM.json
-```
-
-HIR source and warpgroup JSON are mutually exclusive, and `--topology` remains
-required only for HIR. A program requires the explicit `--fixture-costs` flag;
-those illustrative integer costs are design fixtures, not B200 calibration. A
-closed problem rejects that flag because it already owns every numeric cost.
-The command uses the strict program/problem codecs and the combined workflow.
-
-With `--json`, output is the unchanged canonical four-field schedule document.
-Text output is a deterministic view of the same typed result: lane number and
-body order, every iteration interval, synchronization edges, status, and the
-derived makespan. A synchronous interval renders with one end; an asynchronous
-interval renders issue end and completion separately. Text rendering does not
-recompute timing or create another schedule model. Existing HIR scheduling is
-not adapted to this boundary.
-
-### 6.7 B200 calibration coverage
-
-B200 calibration coverage is a separate target module over exact
-`OperationSignature` values. Each immutable row contains only its generic
-operation family, canonical signature, implementation ID, implementation
-conditions, resource demands, and one of `missing`, `provider_ready`, or
-`measured`. The families are global-to-shared copy, shared-to-shared compute,
-register/shared local compute, shared/shared remote compute, fused reduction
-and elementwise compute, register rescale, and register-to-shared publication.
-They are classified from expression trees, shape, dtype, and memory spaces,
-never from operation IDs, SSA names, or workload roles.
-
-`provider_ready` means only that a correctness-checked benchmark can be
-materialized for that exact signature. It is not a duration and MUST NOT
-satisfy `CostLibrary.lookup`. Only a retained measured profile may advance an
-exact row to `measured`; a nearby signature remains missing. Hardware,
-environment, source hash, compiler options, statistics, and measurement IDs
-belong to the profile artifact and MUST NOT enter `WarpgroupProblem`.
-
-The initial executable slice is one contiguous 64 by 64 BF16
-global-to-shared copy on B200. Its latency benchmark forms a device dependency
-chain; a separate post-timing kernel copies the shared result to an output
-buffer for complete correctness validation. Compilation, allocation,
-initialization, argument setup, first use, warmup, reset, validation, and output
-transfer remain outside CUDA event intervals. A missing CUDA dependency,
-non-B200 device, failed compilation, unstable sample, incorrect output, or
-profile-store failure produces no frozen artifact and no fallback cost.
+A schedule contains exactly `format`, `lanes`, `sync`, and `times`.
+Synchronization edges identify producer, consumer, and iteration distance.
+Times contain iteration, operation ID, start, issue end, and completion for
+v2/v3; v1 contains start/end.
+
+Export removes completion relations already implied by lane and sync paths.
+The independent verifier reconstructs the finite event graph and checks:
+
+- complete and unique timing coverage;
+- declared durations and completion latency;
+- fixed ownership and lane order;
+- SSA readiness and register locality;
+- shared visibility and overwrite lifetime;
+- cumulative resource capacity;
+- synchronization inequalities and acyclicity;
+- one periodic II across all body rows in v3.
+
+Deleting a required synchronization edge or mutating a timing witness must
+cause verification to fail.

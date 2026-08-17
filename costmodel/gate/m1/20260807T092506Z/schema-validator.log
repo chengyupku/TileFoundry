@@ -1,5 +1,0 @@
-schemas=7 meta=PASS
-calibration=hardware-v1=PASS
-shared_cross_role_warp=ACCEPTED
-duplicate_same_role=REJECTED
-non_ascii_identifier=REJECTED

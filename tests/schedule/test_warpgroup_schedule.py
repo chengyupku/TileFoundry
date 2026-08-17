@@ -80,21 +80,9 @@ from tilefoundry.schedule.warpgroup.expression import (
     IndexExpression,
     value_references,
 )
-from tilefoundry.target.cuda.warpgroup_costs import (
-    B200CalibrationMissingError,
-    B200OperationFamily,
-    CalibrationStatus,
-    b200_global_to_shared_copy_signature,
-    b200_warpgroup_coverage_matrix,
-)
 
 ROOT = Path(__file__).parents[2]
-DESIGN = ROOT / "docs" / "design"
 SCHEMAS = ROOT / "schemas"
-
-
-def _document(name: str) -> str:
-    return (DESIGN / name).read_text(encoding="utf-8")
 
 
 def _validator(name: str) -> Draft202012Validator:
@@ -202,47 +190,6 @@ def _library(program: WarpgroupProgram) -> OperationCostLibrary:
         )
     )
     return OperationCostLibrary("cycle", (ResourceCapacity("engine", 1),), entries)
-
-
-def test_m5_b200_coverage_is_exact_and_has_no_fallback_measurement() -> None:
-    signature = b200_global_to_shared_copy_signature()
-    assert (
-        signature.canonical_key
-        == (
-            ROOT / "costmodel" / "benchmarks" / "warpgroup" / "global-to-shared-copy.signature.json"
-        )
-        .read_text(encoding="utf-8")
-        .strip()
-    )
-    matrix = b200_warpgroup_coverage_matrix((signature,))
-    ready = tuple(
-        item for item in matrix.entries if item.status is CalibrationStatus.PROVIDER_READY
-    )
-    assert len(ready) == 1
-    assert not any(hasattr(item, "duration") for item in matrix.entries)
-    entry = ready[0]
-    assert entry.family is B200OperationFamily.GLOBAL_TO_SHARED_COPY
-    assert entry.signature.kind is OperationKind.COPY
-    assert entry.signature.operands[0].shape == (64, 64)
-    assert entry.signature.operands[0].dtype is DType.BF16
-    assert entry.signature.operands[0].space is MemorySpace.GLOBAL
-    assert entry.signature.outputs[0].type.space is MemorySpace.SHARED
-    assert {item.name for item in entry.conditions} == {
-        "cuda_arch",
-        "hardware",
-        "pipeline_depth",
-    }
-    assert {item.resource_id for item in entry.resources} == {
-        "b200.cuda_core",
-        "b200.gmem_read",
-        "b200.smem_write",
-        "b200.warp_issue",
-    }
-    for entry in matrix.entries:
-        with pytest.raises(B200CalibrationMissingError, match="missing correctness-checked"):
-            matrix.require_measured(entry.signature)
-    with pytest.raises(B200CalibrationMissingError, match="missing correctness-checked"):
-        matrix.lookup(dataclasses.replace(signature, kind=OperationKind.COMPUTE))
 
 
 def _rename_program(program: WarpgroupProgram) -> WarpgroupProgram:
@@ -525,18 +472,18 @@ def test_serializers_require_exact_typed_roots_and_nested_records() -> None:
         warpgroup_schedule_to_json(schedule)
 
 
-def test_typed_boundary_import_has_no_solver_cuda_costmodel_or_target_side_effect() -> None:
+def test_typed_boundary_import_does_not_load_solver_backend() -> None:
     code = """
 import sys
 from tilefoundry.schedule.warpgroup import WarpgroupProgram
-forbidden = ('ortools', 'cuda', 'tilefoundry_costmodel', 'tilefoundry.target.amx', 'tilefoundry.target.cuda')
+forbidden = ('ortools',)
 assert WarpgroupProgram.__name__ == 'WarpgroupProgram'
 assert not [name for name in sys.modules if any(name == root or name.startswith(root + '.') for root in forbidden)]
 """
     subprocess.run([sys.executable, "-c", code], check=True, cwd=ROOT)
 
 
-def test_m1_build_closes_generic_program_and_problem_replays_without_library() -> None:
+def test_cost_build_closes_generic_program_and_problem_replays_without_library() -> None:
     program = _generic_values()[0]
     library = _library(program)
 
@@ -561,13 +508,13 @@ import sys
 from tilefoundry.schedule.warpgroup import warpgroup_problem_from_json
 problem = warpgroup_problem_from_json({payload!r})
 assert problem.time_unit == 'cycle'
-forbidden = ('ortools', 'cuda', 'tilefoundry_costmodel', 'tilefoundry.target.amx', 'tilefoundry.target.cuda')
+forbidden = ('ortools',)
 assert not [name for name in sys.modules if any(name == root or name.startswith(root + '.') for root in forbidden)]
 """
     subprocess.run([sys.executable, "-c", code], check=True, cwd=ROOT)
 
 
-def test_m1_signature_erases_operation_ssa_loop_index_and_type_alias_names() -> None:
+def test_cost_signature_erases_operation_ssa_loop_index_and_type_alias_names() -> None:
     program = _generic_values()[0]
     renamed = _rename_program(program)
 
@@ -581,7 +528,7 @@ def _operation_document(document: dict[str, object], operation_id: str) -> dict[
     return next(item for item in document["loop"]["ops"] if item["id"] == operation_id)
 
 
-def test_m1_signature_changes_with_cost_relevant_semantics() -> None:
+def test_cost_signature_changes_with_cost_relevant_semantics() -> None:
     program = _generic_values()[0]
     baseline = {item.id: operation_signature(program, item) for item in program.loop.ops}
 
@@ -631,7 +578,7 @@ def test_m1_signature_changes_with_cost_relevant_semantics() -> None:
         assert operation_signature(changed, operation) != baseline[operation_id]
 
 
-def test_m1_signature_preserves_operand_aliasing_and_all_atomic_outputs() -> None:
+def test_cost_signature_preserves_operand_aliasing_and_all_atomic_outputs() -> None:
     document = _canonical_document(_generic_values()[0], warpgroup_program_to_json)
     operation = _operation_document(document, "advance")
     operation["outputs"].append(
@@ -677,7 +624,7 @@ def _single_operation_program(
     )
 
 
-def test_m1_axis_and_work_class_are_explicit_signature_semantics() -> None:
+def test_cost_axis_and_work_class_are_explicit_signature_semantics() -> None:
     reduce0 = _single_operation_program(
         ["reduce", "sum", 0, "%source"],
         inputs=[{"id": "%source", "type": "source"}],
@@ -740,7 +687,7 @@ def test_m1_axis_and_work_class_are_explicit_signature_semantics() -> None:
     )
 
 
-def test_m1_matmul_result_dtype_is_declared_without_implicit_fp32() -> None:
+def test_cost_matmul_result_dtype_is_declared_without_implicit_fp32() -> None:
     def program(dtype: str) -> WarpgroupProgram:
         return _single_operation_program(
             ["matmul", "%lhs", "%rhs"],
@@ -778,7 +725,7 @@ class _TrackingLibrary:
             raise WarpgroupCostMissingError(signature) from None
 
 
-def test_m1_build_queries_each_unique_signature_once() -> None:
+def test_cost_build_queries_each_unique_signature_once() -> None:
     document = _canonical_document(_generic_values()[0], warpgroup_program_to_json)
     document["loop"]["ops"].append(
         {
@@ -796,7 +743,7 @@ def test_m1_build_queries_each_unique_signature_once() -> None:
     assert len(problem.loop.ops) == len(program.loop.ops)
 
 
-def test_m1_build_aggregates_missing_signatures_without_partial_problem() -> None:
+def test_cost_build_aggregates_missing_signatures_without_partial_problem() -> None:
     program = _generic_values()[0]
     signatures = set(_signatures(program))
     library = _TrackingLibrary({})
@@ -809,7 +756,7 @@ def test_m1_build_aggregates_missing_signatures_without_partial_problem() -> Non
     assert len(library.calls) == len(signatures)
 
 
-def test_m1_exact_library_rejects_ambiguous_entries() -> None:
+def test_cost_exact_library_rejects_ambiguous_entries() -> None:
     signature = _signatures(_generic_values()[0])[0]
     entry = OperationCostEntry(signature, OperationCost(1, ()))
     with pytest.raises(WarpgroupCostAmbiguityError, match="duplicate signatures"):
@@ -854,7 +801,7 @@ def _lane_map(result: WarpgroupSolveResult) -> dict[str, int]:
     }
 
 
-def test_m2_independent_work_overlaps_on_two_lanes_and_serializes_on_one() -> None:
+def test_solver_independent_work_overlaps_on_two_lanes_and_serializes_on_one() -> None:
     parallel = solve_warpgroup_problem(_independent_solve_problem(warp_groups=2))
     serial = solve_warpgroup_problem(_independent_solve_problem(warp_groups=1))
 
@@ -866,7 +813,7 @@ def test_m2_independent_work_overlaps_on_two_lanes_and_serializes_on_one() -> No
     assert serial.makespan == 4
 
 
-def test_m2_register_locality_and_shared_handoff_have_distinct_lane_rules() -> None:
+def test_solver_register_locality_and_shared_handoff_have_distinct_lane_rules() -> None:
     register_type = TensorType("register", (1,), DType.FP32, MemorySpace.REGISTER)
     register_problem = WarpgroupProblem(
         PROBLEM_FORMAT,
@@ -1003,7 +950,7 @@ def test_m2_register_locality_and_shared_handoff_have_distinct_lane_rules() -> N
     assert shared_result.makespan == 9
 
 
-def test_m2_lane_assignment_and_body_order_are_stable_across_iterations() -> None:
+def test_solver_lane_assignment_and_body_order_are_stable_across_iterations() -> None:
     result = solve_warpgroup_problem(_independent_solve_problem(warp_groups=1, iterations=3))
     times = _time_map(result)
     lane = result.lanes[0].operations
@@ -1015,7 +962,7 @@ def test_m2_lane_assignment_and_body_order_are_stable_across_iterations() -> Non
         assert times[(iteration, lane[-1])].end <= times[(iteration + 1, lane[0])].start
 
 
-def test_m2_cumulative_capacity_controls_legal_overlap() -> None:
+def test_solver_cumulative_capacity_controls_legal_overlap() -> None:
     serial = solve_warpgroup_problem(_independent_solve_problem(warp_groups=2, capacity=1))
     parallel = solve_warpgroup_problem(_independent_solve_problem(warp_groups=2, capacity=2))
 
@@ -1023,7 +970,7 @@ def test_m2_cumulative_capacity_controls_legal_overlap() -> None:
     assert parallel.makespan == 2
 
 
-def test_m2_shared_allocation_reuse_waits_for_every_previous_use() -> None:
+def test_solver_shared_allocation_reuse_waits_for_every_previous_use() -> None:
     types = (
         TensorType("source", (2, 1), DType.FP32, MemorySpace.GLOBAL),
         TensorType("shared", (1,), DType.FP32, MemorySpace.SHARED),
@@ -1071,8 +1018,8 @@ def test_m2_shared_allocation_reuse_waits_for_every_previous_use() -> None:
     assert result.makespan == 10
 
 
-def test_m2_m3_loop_carried_shared_init_and_reuse_boundary() -> None:
-    """M2/M3 lacked a boundary test separating external init from body reuse."""
+def test_shared_loop_carried_init_and_reuse_boundary() -> None:
+    """Separate external initialization from body reuse."""
     types = (
         TensorType("source", (2, 1), DType.FP32, MemorySpace.GLOBAL),
         TensorType("shared", (1,), DType.FP32, MemorySpace.SHARED),
@@ -1141,7 +1088,7 @@ def test_m2_m3_loop_carried_shared_init_and_reuse_boundary() -> None:
         )
 
 
-def test_m2_repeated_deterministic_solves_are_identical() -> None:
+def test_solver_repeated_deterministic_solves_are_identical() -> None:
     problem = _generic_values()[1]
     assert solve_warpgroup_problem(problem) == solve_warpgroup_problem(problem)
 
@@ -1163,7 +1110,7 @@ def _fixed_owner_program() -> WarpgroupProgram:
     )
 
 
-def test_m6_fixed_owner_build_round_trip_keeps_empty_group() -> None:
+def test_fixed_owner_build_round_trip_keeps_empty_group() -> None:
     program = _fixed_owner_program()
     problem = build_warpgroup_problem(program, _library(program))
 
@@ -1193,7 +1140,7 @@ def test_m6_fixed_owner_build_round_trip_keeps_empty_group() -> None:
     assert result == schedule_warpgroups(problem)
 
 
-def test_m6_fixed_owner_searches_same_group_order_without_migration() -> None:
+def test_fixed_owner_searches_same_group_order_without_migration() -> None:
     value_type = TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER)
     problem = WarpgroupProblem(
         PROBLEM_FORMAT_V3,
@@ -1239,7 +1186,7 @@ def test_m6_fixed_owner_searches_same_group_order_without_migration() -> None:
     assert result.lanes[2].operations == ()
 
 
-def test_m6_fixed_owner_verifier_rejects_cross_group_move() -> None:
+def test_fixed_owner_verifier_rejects_cross_group_move() -> None:
     problem = build_warpgroup_problem(_fixed_owner_program(), _library(_fixed_owner_program()))
     schedule = schedule_warpgroups(problem).schedule
     moved = tuple(
@@ -1267,7 +1214,7 @@ def test_m6_fixed_owner_verifier_rejects_cross_group_move() -> None:
         ("v3", "v2", False),
     ),
 )
-def test_m6_problem_schedule_formats_are_strictly_paired(
+def test_problem_schedule_formats_are_strictly_paired(
     problem_version: str, schedule_version: str, valid: bool
 ) -> None:
     generic_problem = _generic_values()[1]
@@ -1301,7 +1248,7 @@ def test_m6_problem_schedule_formats_are_strictly_paired(
         ["select", "%condition", "%x"],
     ),
 )
-def test_m6_new_schema_and_decoder_reject_invalid_expression_arity(
+def test_schema_and_decoder_reject_invalid_expression_arity(
     invalid_expression: list[object],
 ) -> None:
     program = _fixed_owner_program()
@@ -1358,7 +1305,7 @@ def _periodic_problem() -> WarpgroupProblem:
     )
 
 
-def test_m6_1_m6_3_periodic_objective_and_tie_break_are_deterministic() -> None:
+def test_periodic_objective_and_tie_break_are_deterministic() -> None:
     problem = _periodic_problem()
     first = solve_warpgroup_problem(problem)
     second = solve_warpgroup_problem(problem)
@@ -1425,7 +1372,7 @@ def test_m6_1_m6_3_periodic_objective_and_tie_break_are_deterministic() -> None:
     assert first.makespan == max(item.completion for item in first.times)
 
 
-def test_m6_1_verifier_rejects_one_iteration_period_shift() -> None:
+def test_periodic_verifier_rejects_one_iteration_period_shift() -> None:
     problem = _periodic_problem()
     schedule = export_warpgroup_schedule(problem, solve_warpgroup_problem(problem))
     shifted_times = tuple(
@@ -1482,7 +1429,7 @@ def _periodic_resource_problem(
     )
 
 
-def test_m6_2_m6_4_compact_model_size_is_iteration_independent(
+def test_periodic_compact_model_size_is_iteration_independent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cp_model = importlib.import_module("ortools.sat.python.cp_model")
@@ -1527,7 +1474,7 @@ def test_m6_2_m6_4_compact_model_size_is_iteration_independent(
     assert warpgroup_schedule_to_json(repeated.schedule) == warpgroup_schedule_to_json(schedules[1])
 
 
-def test_m6_2_m6_3_m6_5_compact_prefixes_match_finite_reference() -> None:
+def test_periodic_compact_prefixes_match_finite_reference() -> None:
     """Finite materialization handles prologue, body, and omitted successor rows."""
     program = _fixed_owner_program()
     base_problem = build_warpgroup_problem(program, _library(program))
@@ -1580,7 +1527,7 @@ def test_m6_2_m6_3_m6_5_compact_prefixes_match_finite_reference() -> None:
     )
 
 
-def test_m6_4_periodic_resource_boundaries_are_compact_and_deterministic() -> None:
+def test_periodic_resource_boundaries_are_compact_and_deterministic() -> None:
     serialized: list[str] = []
     for capacity, expected_ii in ((1, 4), (2, 2)):
         problem = _periodic_resource_problem(capacity=capacity, iterations=3)
@@ -1619,7 +1566,7 @@ def test_m6_4_periodic_resource_boundaries_are_compact_and_deterministic() -> No
             assert (5 + long_ii - 1) // long_ii == 3
 
 
-def test_m6_2_external_shared_init_has_an_independent_prologue() -> None:
+def test_periodic_external_shared_init_has_an_independent_prologue() -> None:
     types = (
         TensorType("source", (2, 1), DType.FP32, MemorySpace.GLOBAL),
         TensorType("shared", (1,), DType.FP32, MemorySpace.SHARED),
@@ -1749,7 +1696,7 @@ def _async_library(program: WarpgroupProgram, *, resource_windows: bool) -> Oper
     )
 
 
-def test_m5_async_timing_resource_windows_and_v1_replay_share_one_workflow() -> None:
+def test_async_timing_resource_windows_and_v1_replay_share_one_workflow() -> None:
     program = _async_program()
     library = _async_library(program, resource_windows=False)
     problem = build_warpgroup_problem(program, library)
@@ -1828,7 +1775,7 @@ def test_m5_async_timing_resource_windows_and_v1_replay_share_one_workflow() -> 
     )
 
 
-def test_m5_completion_event_graph_reduces_through_an_async_middle_operation() -> None:
+def test_completion_event_graph_reduces_through_an_async_middle_operation() -> None:
     value_type = TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER)
     problem = WarpgroupProblem(
         PROBLEM_FORMAT_V2,
@@ -1894,35 +1841,18 @@ def test_mla_schedule_example_documents_are_independently_verifiable() -> None:
 
 
 def test_mla_reference_documents_and_complete_workflow_are_one_smoke_test() -> None:
-    program = warpgroup_program_from_json(_document("mla-schedule-program.json"))
-    reference_problem = warpgroup_problem_from_json(_document("warpgroup-closed-problem.json"))
-    reference_schedule = warpgroup_schedule_from_json(_document("mla-schedule-output.json"))
+    program = warpgroup_program_from_json(
+        (ROOT / "examples" / "mla-schedule" / "program.json").read_text(encoding="utf-8")
+    )
     library = _library(program)
     problem = build_warpgroup_problem(program, library)
     result = schedule_warpgroups(program, library)
     schedule = result.schedule
-    reference_signatures = tuple(
-        sorted(
-            {operation_signature(program, operation) for operation in program.loop.ops},
-            key=lambda item: item.canonical_key,
-        )
-    )
-    coverage = b200_warpgroup_coverage_matrix(reference_signatures)
 
     verify_warpgroup_schedule(problem, schedule)
-    assert {item.family for item in coverage.entries} == set(B200OperationFamily)
-    assert all(item.status is CalibrationStatus.MISSING for item in coverage.entries)
     assert warpgroup_program_from_json(warpgroup_program_to_json(program)) == program
     assert warpgroup_problem_from_json(warpgroup_problem_to_json(problem)) == problem
     assert warpgroup_schedule_from_json(warpgroup_schedule_to_json(schedule)) == schedule
-    assert (
-        warpgroup_problem_from_json(warpgroup_problem_to_json(reference_problem))
-        == reference_problem
-    )
-    assert (
-        warpgroup_schedule_from_json(warpgroup_schedule_to_json(reference_schedule))
-        == reference_schedule
-    )
     assert {item for lane in schedule.lanes for item in lane.operations} == {
         operation.id for operation in problem.loop.ops
     }
@@ -2025,7 +1955,7 @@ def test_mla_reference_documents_and_complete_workflow_are_one_smoke_test() -> N
     assert len(set(output_half_lanes)) == 2
 
 
-def test_m4_python_program_and_closed_problem_share_one_verified_workflow() -> None:
+def test_program_and_closed_problem_share_one_verified_workflow() -> None:
     program = _generic_values()[0]
     library = _library(program)
     problem = build_warpgroup_problem(program, library)
@@ -2056,18 +1986,16 @@ def _run_warpgroup_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_m4_cli_program_problem_json_and_text_share_one_schedule(tmp_path: Path) -> None:
+def test_cli_program_problem_json_and_text_share_one_schedule(tmp_path: Path) -> None:
     program, problem, _ = _generic_values()
     program_path = tmp_path / "program.json"
     problem_path = tmp_path / "problem.json"
     program_path.write_text(warpgroup_program_to_json(program), encoding="utf-8")
     problem_path.write_text(warpgroup_problem_to_json(problem), encoding="utf-8")
 
-    program_json = _run_warpgroup_cli(
-        "--warpgroup-program", str(program_path), "--fixture-costs", "--json"
-    )
-    problem_json = _run_warpgroup_cli("--warpgroup-problem", str(problem_path), "--json")
-    text = _run_warpgroup_cli("--warpgroup-problem", str(problem_path))
+    program_json = _run_warpgroup_cli("--program", str(program_path), "--fixture-costs", "--json")
+    problem_json = _run_warpgroup_cli("--problem", str(problem_path), "--json")
+    text = _run_warpgroup_cli("--problem", str(problem_path))
 
     assert program_json.returncode == problem_json.returncode == text.returncode == 0
     assert program_json.stderr == problem_json.stderr == text.stderr == ""
@@ -2082,14 +2010,14 @@ def test_m4_cli_program_problem_json_and_text_share_one_schedule(tmp_path: Path)
     for edge in schedule.sync:
         assert f"{edge.after} -> {edge.before} distance={edge.distance}" in text.stdout
 
-    missing_costs = _run_warpgroup_cli("--warpgroup-program", str(program_path))
-    extra_costs = _run_warpgroup_cli("--warpgroup-problem", str(problem_path), "--fixture-costs")
+    missing_costs = _run_warpgroup_cli("--program", str(program_path))
+    extra_costs = _run_warpgroup_cli("--problem", str(problem_path), "--fixture-costs")
     assert missing_costs.returncode == extra_costs.returncode == 1
     assert "requires --fixture-costs" in missing_costs.stderr
     assert "rejects --fixture-costs" in extra_costs.stderr
 
 
-def test_m4_closed_problem_replays_without_library_and_loads_only_solver_backend() -> None:
+def test_closed_problem_replays_without_library_and_loads_only_solver_backend() -> None:
     problem = _generic_values()[1]
     expected = warpgroup_schedule_to_json(schedule_warpgroups(problem).schedule)
     code = f"""
@@ -2099,13 +2027,11 @@ from tilefoundry.schedule.warpgroup import (
     warpgroup_problem_from_json,
     warpgroup_schedule_to_json,
 )
-forbidden = ('ortools', 'cuda', 'tilefoundry_costmodel', 'tilefoundry.target.amx', 'tilefoundry.target.cuda')
+forbidden = ('ortools',)
 assert not [name for name in sys.modules if any(name == root or name.startswith(root + '.') for root in forbidden)]
 problem = warpgroup_problem_from_json({warpgroup_problem_to_json(problem)!r})
 result = schedule_warpgroups(problem)
 assert any(name == 'ortools' or name.startswith('ortools.') for name in sys.modules)
-forbidden = forbidden[1:]
-assert not [name for name in sys.modules if any(name == root or name.startswith(root + '.') for root in forbidden)]
 print(warpgroup_schedule_to_json(result.schedule))
 """
     replay = subprocess.run(
@@ -2121,7 +2047,7 @@ print(warpgroup_schedule_to_json(result.schedule))
 import sys
 import tilefoundry.cli
 import tilefoundry.schedule.warpgroup
-forbidden = ('ortools', 'cuda', 'tilefoundry_costmodel', 'tilefoundry.target.amx', 'tilefoundry.target.cuda')
+forbidden = ('ortools',)
 assert not [name for name in sys.modules if any(name == root or name.startswith(root + '.') for root in forbidden)]
 """
     subprocess.run([sys.executable, "-c", import_code], cwd=ROOT, check=True)
@@ -2209,8 +2135,8 @@ def _m3_schedule() -> tuple[WarpgroupProblem, WarpgroupSchedule]:
     return problem, export_warpgroup_schedule(problem, solve_warpgroup_problem(problem))
 
 
-def test_m3_export_reduces_sync_and_round_trips_the_four_field_schedule() -> None:
-    """M2 had no workflow covering cross-lane control reachability."""
+def test_export_reduces_sync_and_round_trips_the_four_field_schedule() -> None:
+    """Cover cross-lane control reachability through the public workflow."""
     problem, schedule = _m3_schedule()
 
     verify_warpgroup_schedule(problem, schedule)
@@ -2238,8 +2164,8 @@ def test_m3_export_reduces_sync_and_round_trips_the_four_field_schedule() -> Non
         verify_warpgroup_schedule(problem, without_handoff)
 
 
-def test_m3_verifier_rejects_mutated_witness_contracts() -> None:
-    """M2 tests observed solves but could not reject a modified exported witness."""
+def test_verifier_rejects_mutated_witness_contracts() -> None:
+    """Reject modifications to an independently exported witness."""
     problem, schedule = _m3_schedule()
     times = list(schedule.times)
     first = times[0]
@@ -2365,7 +2291,7 @@ def test_m3_verifier_rejects_mutated_witness_contracts() -> None:
         verify_warpgroup_schedule(register_problem, cross_lane_register)
 
 
-def test_m3_verifier_process_does_not_load_ortools() -> None:
+def test_verifier_process_does_not_load_ortools() -> None:
     problem, schedule = _m3_schedule()
     code = f"""
 import sys
@@ -2377,7 +2303,7 @@ from tilefoundry.schedule.warpgroup import (
 problem = warpgroup_problem_from_json({warpgroup_problem_to_json(problem)!r})
 schedule = warpgroup_schedule_from_json({warpgroup_schedule_to_json(schedule)!r})
 verify_warpgroup_schedule(problem, schedule)
-forbidden = ('ortools', 'cuda', 'tilefoundry_costmodel', 'tilefoundry.target.amx', 'tilefoundry.target.cuda')
+forbidden = ('ortools',)
 assert not [name for name in sys.modules if any(name == root or name.startswith(root + '.') for root in forbidden)]
 """
     subprocess.run([sys.executable, "-c", code], check=True, cwd=ROOT)
