@@ -1880,6 +1880,19 @@ def test_m5_completion_event_graph_reduces_through_an_async_middle_operation() -
     assert SynchronizationEdge("a", "b", 0) not in schedule.sync
 
 
+def test_mla_schedule_example_documents_are_independently_verifiable() -> None:
+    directory = ROOT / "examples" / "mla-schedule"
+    for iterations in (2, 16):
+        problem = warpgroup_problem_from_json(
+            (directory / f"problem-{iterations}.json").read_text(encoding="utf-8")
+        )
+        schedule = warpgroup_schedule_from_json(
+            (directory / f"schedule-{iterations}.json").read_text(encoding="utf-8")
+        )
+        assert problem.loop.iterations == iterations
+        verify_warpgroup_schedule(problem, schedule)
+
+
 def test_lsy_reference_documents_and_complete_workflow_are_one_smoke_test() -> None:
     program = warpgroup_program_from_json(_document("lsy-schedule-input.json"))
     reference_problem = warpgroup_problem_from_json(_document("warpgroup-closed-problem.json"))
