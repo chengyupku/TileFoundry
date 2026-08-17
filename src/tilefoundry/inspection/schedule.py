@@ -300,11 +300,7 @@ def _schedule_payload(schedule: _ScheduleLike) -> dict[str, object]:
             [timed.iteration, timed.operation_id, timed.start, timed.issue_end, timed.completion]
         )
     format_value = str(schedule.format)
-    if format_value not in {
-        "tilefoundry.warpgroup_schedule.v1",
-        "tilefoundry.warpgroup_schedule.v2",
-        "tilefoundry.warpgroup_schedule.v3",
-    }:
+    if format_value != "tilefoundry.warpgroup_schedule":
         raise ValueError(f"unsupported schedule format {format_value!r}")
     return {"format": format_value, "lanes": lanes, "sync": sync, "times": tuple(times)}
 
@@ -312,7 +308,7 @@ def _schedule_payload(schedule: _ScheduleLike) -> dict[str, object]:
 def render_warpgroup_schedule_html(
     schedule: _ScheduleLike, *, title: str = "Warpgroup schedule"
 ) -> str:
-    """Render a validated v1/v2/v3 schedule as deterministic standalone HTML."""
+    """Render a validated warpgroup schedule as deterministic standalone HTML."""
     payload = json.dumps(_schedule_payload(schedule), ensure_ascii=True, separators=(",", ":"))
     payload = payload.replace("</", "<\\/")
     safe_title = html.escape(title, quote=True)

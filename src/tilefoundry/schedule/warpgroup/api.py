@@ -7,10 +7,10 @@ from dataclasses import dataclass, field
 from .build import build_warpgroup_problem
 from .cost import CostLibrary
 from .errors import WarpgroupValidationError
-from .model import WarpgroupProblem, WarpgroupProgram, WarpgroupSchedule
+from .model import WarpgroupProgram, WarpgroupSchedule
 from .solve import SolveStatus, solve_warpgroup_problem
 from .sync import export_warpgroup_schedule
-from .verify import verify_warpgroup_schedule
+from .verify import _verify_warpgroup_schedule
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,27 +34,18 @@ class WarpgroupScheduleResult:
 
 
 def schedule_warpgroups(
-    source: WarpgroupProgram | WarpgroupProblem,
-    cost_library: CostLibrary | None = None,
+    program: WarpgroupProgram,
+    hardware: CostLibrary,
     *,
     timeout_seconds: float = 60.0,
 ) -> WarpgroupScheduleResult:
-    """Close costs when needed, solve once, export, and independently verify."""
-    if type(source) is WarpgroupProgram:
-        if cost_library is None:
-            raise WarpgroupValidationError("a warpgroup program requires a cost library")
-        problem = build_warpgroup_problem(source, cost_library)
-    elif type(source) is WarpgroupProblem:
-        if cost_library is not None:
-            raise WarpgroupValidationError("a closed warpgroup problem rejects a cost library")
-        problem = source
-    else:
-        raise WarpgroupValidationError(
-            "schedule_warpgroups requires an exact WarpgroupProgram or WarpgroupProblem"
-        )
+    """Close a program with hardware costs, solve, export, and independently verify."""
+    if type(program) is not WarpgroupProgram:
+        raise WarpgroupValidationError("schedule_warpgroups requires an exact WarpgroupProgram")
+    problem = build_warpgroup_problem(program, hardware)
     solved = solve_warpgroup_problem(problem, timeout_seconds=timeout_seconds)
     schedule = export_warpgroup_schedule(problem, solved)
-    verify_warpgroup_schedule(problem, schedule)
+    _verify_warpgroup_schedule(problem, schedule)
     return WarpgroupScheduleResult(solved.status, schedule)
 
 

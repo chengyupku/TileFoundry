@@ -6,32 +6,12 @@ import sys
 from pathlib import Path
 
 from tilefoundry.schedule.warpgroup import (
-    OperationCost,
-    OperationCostEntry,
-    OperationCostLibrary,
-    WarpgroupProgram,
     WarpgroupScheduleResult,
-    operation_signature,
     schedule_warpgroups,
-    warpgroup_problem_from_json,
+    warpgroup_hardware_from_json,
     warpgroup_program_from_json,
     warpgroup_schedule_to_json,
 )
-
-
-def _fixture_cost_library(program: WarpgroupProgram) -> OperationCostLibrary:
-    """Build illustrative unit costs; these are design fixtures, not calibration."""
-    signatures = tuple(
-        sorted(
-            {operation_signature(program, operation) for operation in program.loop.ops},
-            key=lambda signature: signature.canonical_key,
-        )
-    )
-    return OperationCostLibrary(
-        "fixture_tick",
-        (),
-        tuple(OperationCostEntry(signature, OperationCost(1, ())) for signature in signatures),
-    )
 
 
 def _render_warpgroup_result(result: WarpgroupScheduleResult) -> str:
@@ -45,12 +25,12 @@ def _render_warpgroup_result(result: WarpgroupScheduleResult) -> str:
             intervals = " ".join(
                 (
                     f"{operation_id}[{times[(iteration, operation_id)].start},"
-                    f"{times[(iteration, operation_id)].end})"
+                    f"{times[(iteration, operation_id)].completion})"
                     if times[(iteration, operation_id)].issue_end
-                    == times[(iteration, operation_id)].end
+                    == times[(iteration, operation_id)].completion
                     else f"{operation_id}[{times[(iteration, operation_id)].start},"
                     f"{times[(iteration, operation_id)].issue_end}|"
-                    f"{times[(iteration, operation_id)].end})"
+                    f"{times[(iteration, operation_id)].completion})"
                 )
                 for operation_id in lane.operations
             )
@@ -65,35 +45,17 @@ def _render_warpgroup_result(result: WarpgroupScheduleResult) -> str:
 
 
 def run_warpgroup_schedule(
-    path: str,
+    program_path: str,
+    hardware_path: str,
     *,
-    is_program: bool,
-    fixture_costs: bool,
     as_json: bool = False,
     solver_timeout: float | None = None,
 ) -> int:
-    """Run one strict warpgroup JSON document through the shared typed workflow."""
-    text = Path(path).read_text(encoding="utf-8")
+    """Run program and hardware JSON through the shared typed workflow."""
     timeout = 60.0 if solver_timeout is None else solver_timeout
-    if is_program:
-        if not fixture_costs:
-            raise ValueError(
-                "--program requires --fixture-costs "
-                "(illustrative fixture costs, not B200 calibration)"
-            )
-        program = warpgroup_program_from_json(text)
-        result = schedule_warpgroups(
-            program,
-            _fixture_cost_library(program),
-            timeout_seconds=timeout,
-        )
-    else:
-        if fixture_costs:
-            raise ValueError("--problem rejects --fixture-costs")
-        result = schedule_warpgroups(
-            warpgroup_problem_from_json(text),
-            timeout_seconds=timeout,
-        )
+    program = warpgroup_program_from_json(Path(program_path).read_text(encoding="utf-8"))
+    hardware = warpgroup_hardware_from_json(Path(hardware_path).read_text(encoding="utf-8"))
+    result = schedule_warpgroups(program, hardware, timeout_seconds=timeout)
     output = (
         warpgroup_schedule_to_json(result.schedule) if as_json else _render_warpgroup_result(result)
     )

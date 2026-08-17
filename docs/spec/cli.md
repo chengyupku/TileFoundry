@@ -6,13 +6,13 @@ OR-Tools, the schedule serializer, or the HTML renderer.
 ## Schedule
 
 ```text
-tilefoundry schedule (--program PROGRAM.json | --problem PROBLEM.json)
-                     [--fixture-costs] [--solver-timeout SECONDS] [--json]
+tilefoundry schedule --program PROGRAM.json --hardware HARDWARE.json
+                     [--solver-timeout SECONDS] [--json]
 ```
 
-`--program` parses a typed semantic program. It requires `--fixture-costs`
-until an external measured-cost adapter is selected by a future interface.
-`--problem` parses a closed numeric problem and rejects `--fixture-costs`.
+`--program` parses typed SSA semantics and fixed warpgroup ownership.
+`--hardware` parses exact signature-indexed timing, resource capacities, and
+resource windows. Both inputs are required; the CLI selects no implicit cost.
 
 `--solver-timeout` is the shared CP-SAT deadline for makespan optimization, II
 optimization, and deterministic tie-breaking. Model construction,

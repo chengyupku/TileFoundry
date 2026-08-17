@@ -20,14 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", parser_class=_Parser)
 
     schedule = commands.add_parser("schedule", help="search a warpgroup schedule")
-    source = schedule.add_mutually_exclusive_group(required=True)
-    source.add_argument("--program", metavar="PROGRAM.json", help="typed warpgroup program")
-    source.add_argument("--problem", metavar="PROBLEM.json", help="closed numeric problem")
-    schedule.add_argument(
-        "--fixture-costs",
-        action="store_true",
-        help="use illustrative unit costs for a program",
-    )
+    schedule.add_argument("--program", required=True, metavar="PROGRAM.json")
+    schedule.add_argument("--hardware", required=True, metavar="HARDWARE.json")
     schedule.add_argument("--json", action="store_true", help="write schedule JSON")
     schedule.add_argument(
         "--solver-timeout",
@@ -60,9 +54,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
             return run_warpgroup_schedule(
-                args.program or args.problem,
-                is_program=args.program is not None,
-                fixture_costs=args.fixture_costs,
+                args.program,
+                args.hardware,
                 as_json=args.json,
                 solver_timeout=args.solver_timeout,
             )

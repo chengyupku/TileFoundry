@@ -5,19 +5,16 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from typing import Literal
 
+from .build import build_warpgroup_problem
+from .cost import CostLibrary
 from .errors import WarpgroupVerificationError
 from .expression import value_references
 from .model import (
-    PROBLEM_FORMAT,
-    PROBLEM_FORMAT_V2,
-    PROBLEM_FORMAT_V3,
-    SCHEDULE_FORMAT,
-    SCHEDULE_FORMAT_V2,
-    SCHEDULE_FORMAT_V3,
     MemorySpace,
     SynchronizationEdge,
     TimedOperation,
     WarpgroupProblem,
+    WarpgroupProgram,
     WarpgroupSchedule,
 )
 
@@ -203,20 +200,12 @@ def _verify_resources(problem: WarpgroupProblem, times: dict[_Instance, TimedOpe
                 _fail(f"resource {resource.id!r} exceeds capacity at time {timestamp}")
 
 
-def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSchedule) -> None:
-    """Verify one schedule against its problem without solving it again."""
+def _verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSchedule) -> None:
+    """Verify one schedule against an internal closed problem."""
     if type(problem) is not WarpgroupProblem:
         _fail("verification requires an exact WarpgroupProblem")
     if type(schedule) is not WarpgroupSchedule:
         _fail("verification requires an exact WarpgroupSchedule")
-    expected_schedule_format = {
-        PROBLEM_FORMAT: SCHEDULE_FORMAT,
-        PROBLEM_FORMAT_V2: SCHEDULE_FORMAT_V2,
-        PROBLEM_FORMAT_V3: SCHEDULE_FORMAT_V3,
-    }.get(problem.format)
-    if expected_schedule_format is None or schedule.format != expected_schedule_format:
-        _fail(f"problem {problem.format!r} requires schedule {expected_schedule_format!r}")
-
     operation_by_id = {item.id: item for item in problem.loop.ops}
     expected_operations = set(operation_by_id)
     if len(schedule.lanes) != problem.warp_groups:
@@ -235,16 +224,13 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
         missing = sorted(expected_operations - set(lane_by_operation))
         unknown = sorted(set(lane_by_operation) - expected_operations)
         _fail(f"schedule lane coverage differs: missing={missing!r}, unknown={unknown!r}")
-    if problem.format == PROBLEM_FORMAT_V3:
-        for operation in problem.loop.ops:
-            if operation.warp_group is None:
-                _fail(f"fixed-owner operation {operation.id!r} lacks warp_group")
-            if lane_by_operation[operation.id] != operation.warp_group:
-                _fail(
-                    f"operation {operation.id!r} is scheduled on lane "
-                    f"{lane_by_operation[operation.id]}, expected warp_group "
-                    f"{operation.warp_group}"
-                )
+    for operation in problem.loop.ops:
+        if lane_by_operation[operation.id] != operation.warp_group:
+            _fail(
+                f"operation {operation.id!r} is scheduled on lane "
+                f"{lane_by_operation[operation.id]}, expected warp_group "
+                f"{operation.warp_group}"
+            )
 
     expected_instances = {
         (iteration, operation_id)
@@ -268,11 +254,11 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
             _fail(f"timed operation {instance!r} has the wrong duration: issue duration")
         if timed.completion - timed.start != operation.completion_latency:
             _fail(f"timed operation {instance!r} has the wrong duration: completion latency")
-    if problem.format == PROBLEM_FORMAT_V3 and problem.loop.iterations >= 3:
+    if problem.loop.iterations >= 3:
         first_operation = min(expected_operations)
         initiation_interval = times[(2, first_operation)].start - times[(1, first_operation)].start
         if initiation_interval <= 0:
-            _fail("v3 periodic initiation interval must be positive")
+            _fail("periodic initiation interval must be positive")
         for operation_id in sorted(expected_operations):
             for iteration in range(1, problem.loop.iterations - 1):
                 actual = (
@@ -281,7 +267,7 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
                 )
                 if actual != initiation_interval:
                     _fail(
-                        f"v3 periodic initiation interval differs for "
+                        f"periodic initiation interval differs for "
                         f"{operation_id!r} at iteration {iteration}: "
                         f"expected {initiation_interval}, got {actual}"
                     )
@@ -331,6 +317,15 @@ def verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSche
     _verify_resources(problem, times)
     nodes = set(expected_instances)
     _require_acyclic(nodes, control_edges | semantic_edges)
+
+
+def verify_warpgroup_schedule(
+    program: WarpgroupProgram,
+    hardware: CostLibrary,
+    schedule: WarpgroupSchedule,
+) -> None:
+    """Verify one schedule against its public program and hardware inputs."""
+    _verify_warpgroup_schedule(build_warpgroup_problem(program, hardware), schedule)
 
 
 __all__ = ["verify_warpgroup_schedule"]

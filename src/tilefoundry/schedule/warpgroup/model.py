@@ -1,4 +1,4 @@
-"""Strict immutable records for warpgroup programs, problems, and schedules."""
+"""Strict immutable records for warpgroup programs and schedules."""
 
 from __future__ import annotations
 
@@ -32,14 +32,8 @@ from .expression import (
     value_references,
 )
 
-PROGRAM_FORMAT = "tilefoundry.warpgroup_program.v1"
-PROGRAM_FORMAT_V2 = "tilefoundry.warpgroup_program.v2"
-PROBLEM_FORMAT = "tilefoundry.warpgroup_problem.v1"
-PROBLEM_FORMAT_V2 = "tilefoundry.warpgroup_problem.v2"
-PROBLEM_FORMAT_V3 = "tilefoundry.warpgroup_problem.v3"
-SCHEDULE_FORMAT = "tilefoundry.warpgroup_schedule.v1"
-SCHEDULE_FORMAT_V2 = "tilefoundry.warpgroup_schedule.v2"
-SCHEDULE_FORMAT_V3 = "tilefoundry.warpgroup_schedule.v3"
+PROGRAM_FORMAT = "tilefoundry.warpgroup_program"
+SCHEDULE_FORMAT = "tilefoundry.warpgroup_schedule"
 
 
 class MemorySpace(str, Enum):
@@ -201,7 +195,7 @@ class ProgramOperation:
 
     id: str
     outputs: tuple[OperationOutput, ...]
-    warp_group: int | None = None
+    warp_group: int
 
     def __post_init__(self) -> None:
         validate_id(self.id, "operation ID")
@@ -209,9 +203,9 @@ class ProgramOperation:
         if not outputs:
             raise WarpgroupValidationError(f"operation {self.id!r} must define an output")
         _unique_ids(outputs, "operation output")
-        if self.warp_group is not None and type(self.warp_group) is not int:
+        if type(self.warp_group) is not int:
             raise WarpgroupValidationError("operation warp_group must be an integer")
-        if self.warp_group is not None and self.warp_group < 0:
+        if self.warp_group < 0:
             raise WarpgroupValidationError("operation warp_group must be non-negative")
         object.__setattr__(self, "outputs", tuple(sorted(outputs, key=lambda item: item.id)))
 
@@ -226,18 +220,6 @@ class ResourceCapacity:
     def __post_init__(self) -> None:
         validate_id(self.id, "resource ID")
         positive_int(self.capacity, f"resource {self.id!r} capacity")
-
-
-@dataclass(frozen=True, slots=True)
-class ResourceDemand:
-    """One positive integer operation demand on a declared resource."""
-
-    resource_id: str
-    amount: int
-
-    def __post_init__(self) -> None:
-        validate_id(self.resource_id, "resource demand ID")
-        positive_int(self.amount, f"resource {self.resource_id!r} demand")
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -262,12 +244,10 @@ class ProblemOperation:
 
     id: str
     outputs: tuple[OperationOutput, ...]
-    duration: int = 0
-    resources: tuple[ResourceDemand, ...] = ()
-    issue_duration: int = 0
-    completion_latency: int = 0
-    resource_windows: tuple[ResourceWindow, ...] = ()
-    warp_group: int | None = None
+    warp_group: int
+    issue_duration: int
+    completion_latency: int
+    resource_windows: tuple[ResourceWindow, ...]
 
     def __post_init__(self) -> None:
         validate_id(self.id, "operation ID")
@@ -275,71 +255,30 @@ class ProblemOperation:
         if not outputs:
             raise WarpgroupValidationError(f"operation {self.id!r} must define an output")
         _unique_ids(outputs, "operation output")
-        if self.warp_group is not None and type(self.warp_group) is not int:
+        if type(self.warp_group) is not int:
             raise WarpgroupValidationError("operation warp_group must be an integer")
-        if self.warp_group is not None and self.warp_group < 0:
+        if self.warp_group < 0:
             raise WarpgroupValidationError("operation warp_group must be non-negative")
-        if self.issue_duration == 0 and self.completion_latency == 0:
-            positive_int(self.duration, f"operation {self.id!r} duration")
-            issue_duration = self.duration
-            completion_latency = self.duration
-        else:
-            positive_int(self.issue_duration, f"operation {self.id!r} issue duration")
-            positive_int(
-                self.completion_latency,
-                f"operation {self.id!r} completion latency",
-            )
-            if self.completion_latency < self.issue_duration:
-                raise WarpgroupValidationError(
-                    f"operation {self.id!r} completion latency must be >= issue duration"
-                )
-            if self.duration not in (0, self.completion_latency):
-                raise WarpgroupValidationError(
-                    f"operation {self.id!r} legacy duration disagrees with completion latency"
-                )
-            issue_duration = self.issue_duration
-            completion_latency = self.completion_latency
-        object.__setattr__(self, "duration", completion_latency)
-        object.__setattr__(self, "issue_duration", issue_duration)
-        object.__setattr__(self, "completion_latency", completion_latency)
-        resources = _typed_tuple(self.resources, ResourceDemand, f"operation {self.id!r} resources")
-        ids = tuple(item.resource_id for item in resources)
-        if len(ids) != len(set(ids)):
+        positive_int(self.issue_duration, f"operation {self.id!r} issue duration")
+        positive_int(
+            self.completion_latency,
+            f"operation {self.id!r} completion latency",
+        )
+        if self.completion_latency < self.issue_duration:
             raise WarpgroupValidationError(
-                f"operation {self.id!r} has duplicate resource demand IDs"
+                f"operation {self.id!r} completion latency must be >= issue duration"
             )
         windows = _typed_tuple(
             self.resource_windows,
             ResourceWindow,
             f"operation {self.id!r} resource windows",
         )
-        if not windows:
-            windows = tuple(
-                ResourceWindow(item.resource_id, item.amount, 0, completion_latency)
-                for item in resources
-            )
         for window in windows:
-            if window.start_offset + window.duration > completion_latency:
+            if window.start_offset + window.duration > self.completion_latency:
                 raise WarpgroupValidationError(
                     f"operation {self.id!r} resource window exceeds completion latency"
                 )
-        maximums: dict[str, int] = {}
-        for window in windows:
-            maximums[window.resource_id] = max(maximums.get(window.resource_id, 0), window.amount)
-        if resources:
-            if {item.resource_id: item.amount for item in resources} != maximums:
-                raise WarpgroupValidationError(
-                    f"operation {self.id!r} resource demands and windows disagree"
-                )
-        else:
-            resources = tuple(
-                ResourceDemand(resource_id, amount)
-                for resource_id, amount in sorted(maximums.items())
-            )
         object.__setattr__(self, "outputs", tuple(sorted(outputs, key=lambda item: item.id)))
-        object.__setattr__(
-            self, "resources", tuple(sorted(resources, key=lambda item: item.resource_id))
-        )
         object.__setattr__(self, "resource_windows", tuple(sorted(windows)))
 
 
@@ -407,10 +346,8 @@ class WarpgroupProgram:
     loop: ProgramLoop
 
     def __post_init__(self) -> None:
-        if self.format not in (PROGRAM_FORMAT, PROGRAM_FORMAT_V2):
-            raise WarpgroupValidationError(
-                f"program format must be {PROGRAM_FORMAT!r} or {PROGRAM_FORMAT_V2!r}"
-            )
+        if self.format != PROGRAM_FORMAT:
+            raise WarpgroupValidationError(f"program format must be {PROGRAM_FORMAT!r}")
         positive_int(self.warp_groups, "warp_groups")
         types = _typed_tuple(self.types, TensorType, "program types")
         inputs = _typed_tuple(self.inputs, ProgramInput, "program inputs")
@@ -423,7 +360,6 @@ class WarpgroupProgram:
         _validate_ownership(
             self.loop.ops,
             self.warp_groups,
-            required=self.format == PROGRAM_FORMAT_V2,
             label="program",
         )
         _validate_semantics(self.types, self.inputs, self.loop)
@@ -435,9 +371,8 @@ class WarpgroupProgram:
 
 @dataclass(frozen=True, slots=True)
 class WarpgroupProblem:
-    """A replayable pure-integer scheduling input with no provider or backend."""
+    """The internal pure-integer closure of a program and hardware description."""
 
-    format: str
     time_unit: str
     warp_groups: int
     resources: tuple[ResourceCapacity, ...]
@@ -446,11 +381,6 @@ class WarpgroupProblem:
     loop: ProblemLoop
 
     def __post_init__(self) -> None:
-        if self.format not in (PROBLEM_FORMAT, PROBLEM_FORMAT_V2, PROBLEM_FORMAT_V3):
-            raise WarpgroupValidationError(
-                f"problem format must be one of {PROBLEM_FORMAT!r}, {PROBLEM_FORMAT_V2!r}, "
-                f"or {PROBLEM_FORMAT_V3!r}"
-            )
         validate_id(self.time_unit, "time_unit")
         positive_int(self.warp_groups, "warp_groups")
         resources = _typed_tuple(self.resources, ResourceCapacity, "problem resources")
@@ -467,38 +397,15 @@ class WarpgroupProblem:
         _validate_ownership(
             self.loop.ops,
             self.warp_groups,
-            required=self.format == PROBLEM_FORMAT_V3,
             label="problem",
         )
         capacity = {item.id: item.capacity for item in self.resources}
         for operation in self.loop.ops:
-            if self.format == PROBLEM_FORMAT and (
-                operation.issue_duration != operation.completion_latency
-                or operation.resource_windows
-                != tuple(
-                    ResourceWindow(
-                        demand.resource_id,
-                        demand.amount,
-                        0,
-                        operation.completion_latency,
-                    )
-                    for demand in operation.resources
-                )
-            ):
-                raise WarpgroupValidationError(
-                    "problem v1 cannot represent asynchronous timing or resource windows"
-                )
-            for demand in operation.resources:
-                if demand.resource_id not in capacity:
-                    raise WarpgroupValidationError(
-                        f"operation {operation.id!r} uses undefined resource {demand.resource_id!r}"
-                    )
-                if demand.amount > capacity[demand.resource_id]:
-                    raise WarpgroupValidationError(
-                        f"operation {operation.id!r} demand for {demand.resource_id!r} "
-                        "exceeds capacity"
-                    )
             for window in operation.resource_windows:
+                if window.resource_id not in capacity:
+                    raise WarpgroupValidationError(
+                        f"operation {operation.id!r} uses undefined resource {window.resource_id!r}"
+                    )
                 if window.amount > capacity[window.resource_id]:
                     raise WarpgroupValidationError(
                         f"operation {operation.id!r} window for {window.resource_id!r} "
@@ -513,7 +420,7 @@ class WarpgroupProblem:
 
 @dataclass(frozen=True, slots=True)
 class WarpgroupLane:
-    """The stable ordered body program assigned to one anonymous lane."""
+    """The stable ordered body program assigned to one warpgroup."""
 
     operations: tuple[str, ...]
 
@@ -551,37 +458,19 @@ class TimedOperation:
     iteration: int
     operation_id: str
     start: int
-    end: int = 0
-    issue_end: int = 0
-    completion: int = 0
+    issue_end: int
+    completion: int
 
     def __post_init__(self) -> None:
         non_negative_int(self.iteration, "time iteration")
         validate_id(self.operation_id, "timed operation ID")
         non_negative_int(self.start, "time start")
-        if self.issue_end == 0 and self.completion == 0:
-            positive_int(self.end, "time end")
-            issue_end = self.end
-            completion = self.end
-        else:
-            issue_end = self.issue_end
-            completion = self.completion
-            if self.end not in (0, completion):
-                raise WarpgroupValidationError("time end and completion must agree")
-        positive_int(issue_end, "time issue end")
-        positive_int(completion, "time completion")
-        if issue_end <= self.start:
+        positive_int(self.issue_end, "time issue end")
+        positive_int(self.completion, "time completion")
+        if self.issue_end <= self.start:
             raise WarpgroupValidationError("time issue end must be greater than start")
-        if completion < issue_end:
+        if self.completion < self.issue_end:
             raise WarpgroupValidationError("time completion must be >= issue end")
-        object.__setattr__(self, "end", completion)
-        object.__setattr__(self, "issue_end", issue_end)
-        object.__setattr__(self, "completion", completion)
-
-    @property
-    def completion_time(self) -> int:
-        """The result-ready timestamp; ``end`` remains the v1 alias."""
-        return self.end
 
 
 @dataclass(frozen=True, slots=True)
@@ -594,11 +483,8 @@ class WarpgroupSchedule:
     times: tuple[TimedOperation, ...]
 
     def __post_init__(self) -> None:
-        if self.format not in (SCHEDULE_FORMAT, SCHEDULE_FORMAT_V2, SCHEDULE_FORMAT_V3):
-            raise WarpgroupValidationError(
-                f"schedule format must be one of {SCHEDULE_FORMAT!r}, {SCHEDULE_FORMAT_V2!r}, "
-                f"or {SCHEDULE_FORMAT_V3!r}"
-            )
+        if self.format != SCHEDULE_FORMAT:
+            raise WarpgroupValidationError(f"schedule format must be {SCHEDULE_FORMAT!r}")
         lanes = _typed_tuple(self.lanes, WarpgroupLane, "schedule lanes")
         sync = _typed_tuple(self.sync, SynchronizationEdge, "schedule sync")
         times = _typed_tuple(self.times, TimedOperation, "schedule times")
@@ -612,8 +498,6 @@ class WarpgroupSchedule:
         instances = tuple((item.iteration, item.operation_id) for item in times)
         if len(instances) != len(set(instances)):
             raise WarpgroupValidationError("schedule contains duplicate timed instances")
-        if self.format == SCHEDULE_FORMAT and any(item.issue_end != item.end for item in times):
-            raise WarpgroupValidationError("schedule v1 cannot represent asynchronous timing")
         object.__setattr__(self, "lanes", lanes)
         object.__setattr__(self, "sync", tuple(sorted(sync)))
         object.__setattr__(self, "times", tuple(sorted(times)))
@@ -623,22 +507,12 @@ def _validate_ownership(
     operations: tuple[ProgramOperation, ...] | tuple[ProblemOperation, ...],
     warp_groups: int,
     *,
-    required: bool,
     label: str,
 ) -> None:
     for operation in operations:
-        if required:
-            if operation.warp_group is None:
-                raise WarpgroupValidationError(
-                    f"{label} operation {operation.id!r} requires warp_group"
-                )
-            if operation.warp_group >= warp_groups:
-                raise WarpgroupValidationError(
-                    f"{label} operation {operation.id!r} warp_group is out of range"
-                )
-        elif operation.warp_group is not None:
+        if operation.warp_group >= warp_groups:
             raise WarpgroupValidationError(
-                f"{label} legacy format must not contain operation warp_group"
+                f"{label} operation {operation.id!r} warp_group is out of range"
             )
 
 
@@ -987,21 +861,15 @@ __all__ = [
     "LoopIterArg",
     "MemorySpace",
     "OperationOutput",
-    "PROBLEM_FORMAT",
     "PROGRAM_FORMAT",
-    "PROGRAM_FORMAT_V2",
     "ProblemLoop",
     "ProblemOperation",
-    "PROBLEM_FORMAT_V3",
     "ProgramInput",
     "ProgramLoop",
     "ProgramOperation",
     "ResourceCapacity",
-    "ResourceDemand",
     "ResourceWindow",
     "SCHEDULE_FORMAT",
-    "SCHEDULE_FORMAT_V2",
-    "SCHEDULE_FORMAT_V3",
     "SynchronizationEdge",
     "TensorType",
     "TimedOperation",

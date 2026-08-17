@@ -1,0 +1,3913 @@
+{
+  "costs": [
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                0
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                1
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                2
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                3
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                4
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                5
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                6
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                7
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 184,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              9,
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "matmul",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                8
+              ],
+              [
+                "transpose",
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 129,
+      "issue_duration": 129,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              256
+            ],
+            "space": "register"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "mul",
+              [
+                "ref",
+                0
+              ],
+              [
+                "ref",
+                1
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "copy",
+              [
+                "ref",
+                2
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "mul",
+              [
+                "ref",
+                0
+              ],
+              [
+                "ref",
+                3
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                256
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 73,
+      "issue_duration": 73,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "exp",
+              [
+                "sub",
+                [
+                  "ref",
+                  0
+                ],
+                [
+                  "ref",
+                  1
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "cast",
+              [
+                "mul",
+                [
+                  "output",
+                  [
+                    64,
+                    1
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "exp",
+                    [
+                      "sub",
+                      [
+                        "ref",
+                        0
+                      ],
+                      [
+                        "ref",
+                        1
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "ref",
+                  2
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 598,
+      "issue_duration": 598,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "i1",
+            "shape": [
+              2,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "add",
+              [
+                "mul",
+                [
+                  "output",
+                  [
+                    64,
+                    1
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "exp",
+                    [
+                      "sub",
+                      [
+                        "ref",
+                        0
+                      ],
+                      [
+                        "output",
+                        [
+                          64,
+                          1
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "max",
+                          [
+                            "ref",
+                            1
+                          ],
+                          [
+                            "reduce",
+                            "max",
+                            1,
+                            [
+                              "output",
+                              [
+                                64,
+                                64
+                              ],
+                              "fp32",
+                              "register",
+                              [
+                                "select",
+                                [
+                                  "index",
+                                  [
+                                    "ref",
+                                    2
+                                  ],
+                                  1
+                                ],
+                                [
+                                  "add",
+                                  [
+                                    "ref",
+                                    3
+                                  ],
+                                  [
+                                    "ref",
+                                    4
+                                  ],
+                                  [
+                                    "ref",
+                                    5
+                                  ],
+                                  [
+                                    "ref",
+                                    6
+                                  ],
+                                  [
+                                    "ref",
+                                    7
+                                  ],
+                                  [
+                                    "ref",
+                                    8
+                                  ],
+                                  [
+                                    "ref",
+                                    9
+                                  ],
+                                  [
+                                    "ref",
+                                    10
+                                  ],
+                                  [
+                                    "ref",
+                                    11
+                                  ]
+                                ],
+                                [
+                                  "literal",
+                                  "-inf"
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "ref",
+                  12
+                ]
+              ],
+              [
+                "reduce",
+                "sum",
+                1,
+                [
+                  "output",
+                  [
+                    64,
+                    64
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "exp",
+                    [
+                      "sub",
+                      [
+                        "output",
+                        [
+                          64,
+                          64
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "select",
+                          [
+                            "index",
+                            [
+                              "ref",
+                              2
+                            ],
+                            1
+                          ],
+                          [
+                            "add",
+                            [
+                              "ref",
+                              3
+                            ],
+                            [
+                              "ref",
+                              4
+                            ],
+                            [
+                              "ref",
+                              5
+                            ],
+                            [
+                              "ref",
+                              6
+                            ],
+                            [
+                              "ref",
+                              7
+                            ],
+                            [
+                              "ref",
+                              8
+                            ],
+                            [
+                              "ref",
+                              9
+                            ],
+                            [
+                              "ref",
+                              10
+                            ],
+                            [
+                              "ref",
+                              11
+                            ]
+                          ],
+                          [
+                            "literal",
+                            "-inf"
+                          ]
+                        ]
+                      ],
+                      [
+                        "output",
+                        [
+                          64,
+                          1
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "max",
+                          [
+                            "ref",
+                            1
+                          ],
+                          [
+                            "reduce",
+                            "max",
+                            1,
+                            [
+                              "output",
+                              [
+                                64,
+                                64
+                              ],
+                              "fp32",
+                              "register",
+                              [
+                                "select",
+                                [
+                                  "index",
+                                  [
+                                    "ref",
+                                    2
+                                  ],
+                                  1
+                                ],
+                                [
+                                  "add",
+                                  [
+                                    "ref",
+                                    3
+                                  ],
+                                  [
+                                    "ref",
+                                    4
+                                  ],
+                                  [
+                                    "ref",
+                                    5
+                                  ],
+                                  [
+                                    "ref",
+                                    6
+                                  ],
+                                  [
+                                    "ref",
+                                    7
+                                  ],
+                                  [
+                                    "ref",
+                                    8
+                                  ],
+                                  [
+                                    "ref",
+                                    9
+                                  ],
+                                  [
+                                    "ref",
+                                    10
+                                  ],
+                                  [
+                                    "ref",
+                                    11
+                                  ]
+                                ],
+                                [
+                                  "literal",
+                                  "-inf"
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "exp",
+              [
+                "sub",
+                [
+                  "ref",
+                  0
+                ],
+                [
+                  "output",
+                  [
+                    64,
+                    1
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "max",
+                    [
+                      "ref",
+                      1
+                    ],
+                    [
+                      "reduce",
+                      "max",
+                      1,
+                      [
+                        "output",
+                        [
+                          64,
+                          64
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "select",
+                          [
+                            "index",
+                            [
+                              "ref",
+                              2
+                            ],
+                            1
+                          ],
+                          [
+                            "add",
+                            [
+                              "ref",
+                              3
+                            ],
+                            [
+                              "ref",
+                              4
+                            ],
+                            [
+                              "ref",
+                              5
+                            ],
+                            [
+                              "ref",
+                              6
+                            ],
+                            [
+                              "ref",
+                              7
+                            ],
+                            [
+                              "ref",
+                              8
+                            ],
+                            [
+                              "ref",
+                              9
+                            ],
+                            [
+                              "ref",
+                              10
+                            ],
+                            [
+                              "ref",
+                              11
+                            ]
+                          ],
+                          [
+                            "literal",
+                            "-inf"
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "max",
+              [
+                "ref",
+                1
+              ],
+              [
+                "reduce",
+                "max",
+                1,
+                [
+                  "output",
+                  [
+                    64,
+                    64
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "select",
+                    [
+                      "index",
+                      [
+                        "ref",
+                        2
+                      ],
+                      1
+                    ],
+                    [
+                      "add",
+                      [
+                        "ref",
+                        3
+                      ],
+                      [
+                        "ref",
+                        4
+                      ],
+                      [
+                        "ref",
+                        5
+                      ],
+                      [
+                        "ref",
+                        6
+                      ],
+                      [
+                        "ref",
+                        7
+                      ],
+                      [
+                        "ref",
+                        8
+                      ],
+                      [
+                        "ref",
+                        9
+                      ],
+                      [
+                        "ref",
+                        10
+                      ],
+                      [
+                        "ref",
+                        11
+                      ]
+                    ],
+                    [
+                      "literal",
+                      "-inf"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "cast",
+              [
+                "output",
+                [
+                  64,
+                  64
+                ],
+                "fp32",
+                "register",
+                [
+                  "exp",
+                  [
+                    "sub",
+                    [
+                      "output",
+                      [
+                        64,
+                        64
+                      ],
+                      "fp32",
+                      "register",
+                      [
+                        "select",
+                        [
+                          "index",
+                          [
+                            "ref",
+                            2
+                          ],
+                          1
+                        ],
+                        [
+                          "add",
+                          [
+                            "ref",
+                            3
+                          ],
+                          [
+                            "ref",
+                            4
+                          ],
+                          [
+                            "ref",
+                            5
+                          ],
+                          [
+                            "ref",
+                            6
+                          ],
+                          [
+                            "ref",
+                            7
+                          ],
+                          [
+                            "ref",
+                            8
+                          ],
+                          [
+                            "ref",
+                            9
+                          ],
+                          [
+                            "ref",
+                            10
+                          ],
+                          [
+                            "ref",
+                            11
+                          ]
+                        ],
+                        [
+                          "literal",
+                          "-inf"
+                        ]
+                      ]
+                    ],
+                    [
+                      "output",
+                      [
+                        64,
+                        1
+                      ],
+                      "fp32",
+                      "register",
+                      [
+                        "max",
+                        [
+                          "ref",
+                          1
+                        ],
+                        [
+                          "reduce",
+                          "max",
+                          1,
+                          [
+                            "output",
+                            [
+                              64,
+                              64
+                            ],
+                            "fp32",
+                            "register",
+                            [
+                              "select",
+                              [
+                                "index",
+                                [
+                                  "ref",
+                                  2
+                                ],
+                                1
+                              ],
+                              [
+                                "add",
+                                [
+                                  "ref",
+                                  3
+                                ],
+                                [
+                                  "ref",
+                                  4
+                                ],
+                                [
+                                  "ref",
+                                  5
+                                ],
+                                [
+                                  "ref",
+                                  6
+                                ],
+                                [
+                                  "ref",
+                                  7
+                                ],
+                                [
+                                  "ref",
+                                  8
+                                ],
+                                [
+                                  "ref",
+                                  9
+                                ],
+                                [
+                                  "ref",
+                                  10
+                                ],
+                                [
+                                  "ref",
+                                  11
+                                ]
+                              ],
+                              [
+                                "literal",
+                                "-inf"
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "exp",
+              [
+                "sub",
+                [
+                  "output",
+                  [
+                    64,
+                    64
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "select",
+                    [
+                      "index",
+                      [
+                        "ref",
+                        2
+                      ],
+                      1
+                    ],
+                    [
+                      "add",
+                      [
+                        "ref",
+                        3
+                      ],
+                      [
+                        "ref",
+                        4
+                      ],
+                      [
+                        "ref",
+                        5
+                      ],
+                      [
+                        "ref",
+                        6
+                      ],
+                      [
+                        "ref",
+                        7
+                      ],
+                      [
+                        "ref",
+                        8
+                      ],
+                      [
+                        "ref",
+                        9
+                      ],
+                      [
+                        "ref",
+                        10
+                      ],
+                      [
+                        "ref",
+                        11
+                      ]
+                    ],
+                    [
+                      "literal",
+                      "-inf"
+                    ]
+                  ]
+                ],
+                [
+                  "output",
+                  [
+                    64,
+                    1
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "max",
+                    [
+                      "ref",
+                      1
+                    ],
+                    [
+                      "reduce",
+                      "max",
+                      1,
+                      [
+                        "output",
+                        [
+                          64,
+                          64
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "select",
+                          [
+                            "index",
+                            [
+                              "ref",
+                              2
+                            ],
+                            1
+                          ],
+                          [
+                            "add",
+                            [
+                              "ref",
+                              3
+                            ],
+                            [
+                              "ref",
+                              4
+                            ],
+                            [
+                              "ref",
+                              5
+                            ],
+                            [
+                              "ref",
+                              6
+                            ],
+                            [
+                              "ref",
+                              7
+                            ],
+                            [
+                              "ref",
+                              8
+                            ],
+                            [
+                              "ref",
+                              9
+                            ],
+                            [
+                              "ref",
+                              10
+                            ],
+                            [
+                              "ref",
+                              11
+                            ]
+                          ],
+                          [
+                            "literal",
+                            "-inf"
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "select",
+              [
+                "index",
+                [
+                  "ref",
+                  2
+                ],
+                1
+              ],
+              [
+                "add",
+                [
+                  "ref",
+                  3
+                ],
+                [
+                  "ref",
+                  4
+                ],
+                [
+                  "ref",
+                  5
+                ],
+                [
+                  "ref",
+                  6
+                ],
+                [
+                  "ref",
+                  7
+                ],
+                [
+                  "ref",
+                  8
+                ],
+                [
+                  "ref",
+                  9
+                ],
+                [
+                  "ref",
+                  10
+                ],
+                [
+                  "ref",
+                  11
+                ]
+              ],
+              [
+                "literal",
+                "-inf"
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 129,
+      "issue_duration": 129,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              256
+            ],
+            "space": "register"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "mul",
+              [
+                "ref",
+                0
+              ],
+              [
+                "ref",
+                1
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                256
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 584,
+      "issue_duration": 584,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "i1",
+            "shape": [
+              2,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "add",
+              [
+                "mul",
+                [
+                  "output",
+                  [
+                    64,
+                    1
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "exp",
+                    [
+                      "sub",
+                      [
+                        "ref",
+                        0
+                      ],
+                      [
+                        "output",
+                        [
+                          64,
+                          1
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "max",
+                          [
+                            "ref",
+                            0
+                          ],
+                          [
+                            "reduce",
+                            "max",
+                            1,
+                            [
+                              "output",
+                              [
+                                64,
+                                64
+                              ],
+                              "fp32",
+                              "register",
+                              [
+                                "select",
+                                [
+                                  "index",
+                                  [
+                                    "ref",
+                                    1
+                                  ],
+                                  0
+                                ],
+                                [
+                                  "add",
+                                  [
+                                    "ref",
+                                    2
+                                  ],
+                                  [
+                                    "ref",
+                                    3
+                                  ],
+                                  [
+                                    "ref",
+                                    4
+                                  ],
+                                  [
+                                    "ref",
+                                    5
+                                  ],
+                                  [
+                                    "ref",
+                                    6
+                                  ],
+                                  [
+                                    "ref",
+                                    7
+                                  ],
+                                  [
+                                    "ref",
+                                    8
+                                  ],
+                                  [
+                                    "ref",
+                                    9
+                                  ],
+                                  [
+                                    "ref",
+                                    10
+                                  ]
+                                ],
+                                [
+                                  "literal",
+                                  "-inf"
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "ref",
+                  11
+                ]
+              ],
+              [
+                "reduce",
+                "sum",
+                1,
+                [
+                  "output",
+                  [
+                    64,
+                    64
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "exp",
+                    [
+                      "sub",
+                      [
+                        "output",
+                        [
+                          64,
+                          64
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "select",
+                          [
+                            "index",
+                            [
+                              "ref",
+                              1
+                            ],
+                            0
+                          ],
+                          [
+                            "add",
+                            [
+                              "ref",
+                              2
+                            ],
+                            [
+                              "ref",
+                              3
+                            ],
+                            [
+                              "ref",
+                              4
+                            ],
+                            [
+                              "ref",
+                              5
+                            ],
+                            [
+                              "ref",
+                              6
+                            ],
+                            [
+                              "ref",
+                              7
+                            ],
+                            [
+                              "ref",
+                              8
+                            ],
+                            [
+                              "ref",
+                              9
+                            ],
+                            [
+                              "ref",
+                              10
+                            ]
+                          ],
+                          [
+                            "literal",
+                            "-inf"
+                          ]
+                        ]
+                      ],
+                      [
+                        "output",
+                        [
+                          64,
+                          1
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "max",
+                          [
+                            "ref",
+                            0
+                          ],
+                          [
+                            "reduce",
+                            "max",
+                            1,
+                            [
+                              "output",
+                              [
+                                64,
+                                64
+                              ],
+                              "fp32",
+                              "register",
+                              [
+                                "select",
+                                [
+                                  "index",
+                                  [
+                                    "ref",
+                                    1
+                                  ],
+                                  0
+                                ],
+                                [
+                                  "add",
+                                  [
+                                    "ref",
+                                    2
+                                  ],
+                                  [
+                                    "ref",
+                                    3
+                                  ],
+                                  [
+                                    "ref",
+                                    4
+                                  ],
+                                  [
+                                    "ref",
+                                    5
+                                  ],
+                                  [
+                                    "ref",
+                                    6
+                                  ],
+                                  [
+                                    "ref",
+                                    7
+                                  ],
+                                  [
+                                    "ref",
+                                    8
+                                  ],
+                                  [
+                                    "ref",
+                                    9
+                                  ],
+                                  [
+                                    "ref",
+                                    10
+                                  ]
+                                ],
+                                [
+                                  "literal",
+                                  "-inf"
+                                ]
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "exp",
+              [
+                "sub",
+                [
+                  "ref",
+                  0
+                ],
+                [
+                  "output",
+                  [
+                    64,
+                    1
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "max",
+                    [
+                      "ref",
+                      0
+                    ],
+                    [
+                      "reduce",
+                      "max",
+                      1,
+                      [
+                        "output",
+                        [
+                          64,
+                          64
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "select",
+                          [
+                            "index",
+                            [
+                              "ref",
+                              1
+                            ],
+                            0
+                          ],
+                          [
+                            "add",
+                            [
+                              "ref",
+                              2
+                            ],
+                            [
+                              "ref",
+                              3
+                            ],
+                            [
+                              "ref",
+                              4
+                            ],
+                            [
+                              "ref",
+                              5
+                            ],
+                            [
+                              "ref",
+                              6
+                            ],
+                            [
+                              "ref",
+                              7
+                            ],
+                            [
+                              "ref",
+                              8
+                            ],
+                            [
+                              "ref",
+                              9
+                            ],
+                            [
+                              "ref",
+                              10
+                            ]
+                          ],
+                          [
+                            "literal",
+                            "-inf"
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "max",
+              [
+                "ref",
+                0
+              ],
+              [
+                "reduce",
+                "max",
+                1,
+                [
+                  "output",
+                  [
+                    64,
+                    64
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "select",
+                    [
+                      "index",
+                      [
+                        "ref",
+                        1
+                      ],
+                      0
+                    ],
+                    [
+                      "add",
+                      [
+                        "ref",
+                        2
+                      ],
+                      [
+                        "ref",
+                        3
+                      ],
+                      [
+                        "ref",
+                        4
+                      ],
+                      [
+                        "ref",
+                        5
+                      ],
+                      [
+                        "ref",
+                        6
+                      ],
+                      [
+                        "ref",
+                        7
+                      ],
+                      [
+                        "ref",
+                        8
+                      ],
+                      [
+                        "ref",
+                        9
+                      ],
+                      [
+                        "ref",
+                        10
+                      ]
+                    ],
+                    [
+                      "literal",
+                      "-inf"
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "cast",
+              [
+                "output",
+                [
+                  64,
+                  64
+                ],
+                "fp32",
+                "register",
+                [
+                  "exp",
+                  [
+                    "sub",
+                    [
+                      "output",
+                      [
+                        64,
+                        64
+                      ],
+                      "fp32",
+                      "register",
+                      [
+                        "select",
+                        [
+                          "index",
+                          [
+                            "ref",
+                            1
+                          ],
+                          0
+                        ],
+                        [
+                          "add",
+                          [
+                            "ref",
+                            2
+                          ],
+                          [
+                            "ref",
+                            3
+                          ],
+                          [
+                            "ref",
+                            4
+                          ],
+                          [
+                            "ref",
+                            5
+                          ],
+                          [
+                            "ref",
+                            6
+                          ],
+                          [
+                            "ref",
+                            7
+                          ],
+                          [
+                            "ref",
+                            8
+                          ],
+                          [
+                            "ref",
+                            9
+                          ],
+                          [
+                            "ref",
+                            10
+                          ]
+                        ],
+                        [
+                          "literal",
+                          "-inf"
+                        ]
+                      ]
+                    ],
+                    [
+                      "output",
+                      [
+                        64,
+                        1
+                      ],
+                      "fp32",
+                      "register",
+                      [
+                        "max",
+                        [
+                          "ref",
+                          0
+                        ],
+                        [
+                          "reduce",
+                          "max",
+                          1,
+                          [
+                            "output",
+                            [
+                              64,
+                              64
+                            ],
+                            "fp32",
+                            "register",
+                            [
+                              "select",
+                              [
+                                "index",
+                                [
+                                  "ref",
+                                  1
+                                ],
+                                0
+                              ],
+                              [
+                                "add",
+                                [
+                                  "ref",
+                                  2
+                                ],
+                                [
+                                  "ref",
+                                  3
+                                ],
+                                [
+                                  "ref",
+                                  4
+                                ],
+                                [
+                                  "ref",
+                                  5
+                                ],
+                                [
+                                  "ref",
+                                  6
+                                ],
+                                [
+                                  "ref",
+                                  7
+                                ],
+                                [
+                                  "ref",
+                                  8
+                                ],
+                                [
+                                  "ref",
+                                  9
+                                ],
+                                [
+                                  "ref",
+                                  10
+                                ]
+                              ],
+                              [
+                                "literal",
+                                "-inf"
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "exp",
+              [
+                "sub",
+                [
+                  "output",
+                  [
+                    64,
+                    64
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "select",
+                    [
+                      "index",
+                      [
+                        "ref",
+                        1
+                      ],
+                      0
+                    ],
+                    [
+                      "add",
+                      [
+                        "ref",
+                        2
+                      ],
+                      [
+                        "ref",
+                        3
+                      ],
+                      [
+                        "ref",
+                        4
+                      ],
+                      [
+                        "ref",
+                        5
+                      ],
+                      [
+                        "ref",
+                        6
+                      ],
+                      [
+                        "ref",
+                        7
+                      ],
+                      [
+                        "ref",
+                        8
+                      ],
+                      [
+                        "ref",
+                        9
+                      ],
+                      [
+                        "ref",
+                        10
+                      ]
+                    ],
+                    [
+                      "literal",
+                      "-inf"
+                    ]
+                  ]
+                ],
+                [
+                  "output",
+                  [
+                    64,
+                    1
+                  ],
+                  "fp32",
+                  "register",
+                  [
+                    "max",
+                    [
+                      "ref",
+                      0
+                    ],
+                    [
+                      "reduce",
+                      "max",
+                      1,
+                      [
+                        "output",
+                        [
+                          64,
+                          64
+                        ],
+                        "fp32",
+                        "register",
+                        [
+                          "select",
+                          [
+                            "index",
+                            [
+                              "ref",
+                              1
+                            ],
+                            0
+                          ],
+                          [
+                            "add",
+                            [
+                              "ref",
+                              2
+                            ],
+                            [
+                              "ref",
+                              3
+                            ],
+                            [
+                              "ref",
+                              4
+                            ],
+                            [
+                              "ref",
+                              5
+                            ],
+                            [
+                              "ref",
+                              6
+                            ],
+                            [
+                              "ref",
+                              7
+                            ],
+                            [
+                              "ref",
+                              8
+                            ],
+                            [
+                              "ref",
+                              9
+                            ],
+                            [
+                              "ref",
+                              10
+                            ]
+                          ],
+                          [
+                            "literal",
+                            "-inf"
+                          ]
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          },
+          {
+            "expr": [
+              "select",
+              [
+                "index",
+                [
+                  "ref",
+                  1
+                ],
+                0
+              ],
+              [
+                "add",
+                [
+                  "ref",
+                  2
+                ],
+                [
+                  "ref",
+                  3
+                ],
+                [
+                  "ref",
+                  4
+                ],
+                [
+                  "ref",
+                  5
+                ],
+                [
+                  "ref",
+                  6
+                ],
+                [
+                  "ref",
+                  7
+                ],
+                [
+                  "ref",
+                  8
+                ],
+                [
+                  "ref",
+                  9
+                ],
+                [
+                  "ref",
+                  10
+                ]
+              ],
+              [
+                "literal",
+                "-inf"
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 558,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              256
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "add",
+              [
+                "ref",
+                0
+              ],
+              [
+                "matmul",
+                [
+                  "ref",
+                  1
+                ],
+                [
+                  "concat",
+                  1,
+                  [
+                    "ref",
+                    2
+                  ],
+                  [
+                    "ref",
+                    3
+                  ],
+                  [
+                    "ref",
+                    4
+                  ],
+                  [
+                    "ref",
+                    5
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                256
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 568,
+      "issue_duration": 23,
+      "resource_windows": [],
+      "signature": {
+        "kind": "compute",
+        "operands": [
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              256
+            ],
+            "space": "register"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          },
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "shared"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "add",
+              [
+                "ref",
+                0
+              ],
+              [
+                "matmul",
+                [
+                  "ref",
+                  1
+                ],
+                [
+                  "concat",
+                  1,
+                  [
+                    "ref",
+                    2
+                  ],
+                  [
+                    "ref",
+                    3
+                  ],
+                  [
+                    "ref",
+                    4
+                  ],
+                  [
+                    "ref",
+                    5
+                  ]
+                ]
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                256
+              ],
+              "space": "register"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                0
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                1
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                2
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                3
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                4
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                5
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                6
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                7
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                0,
+                8
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                0
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                1
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                2
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                3
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                4
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                5
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                6
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                7
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 427,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              16,
+              2,
+              9,
+              64,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index",
+                1,
+                8
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 354,
+      "issue_duration": 350,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "bf16",
+            "shape": [
+              64,
+              64
+            ],
+            "space": "register"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "ref",
+                0
+              ]
+            ],
+            "type": {
+              "dtype": "bf16",
+              "shape": [
+                64,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 144,
+      "issue_duration": 140,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "fp32",
+            "shape": [
+              64,
+              1
+            ],
+            "space": "register"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "ref",
+                0
+              ]
+            ],
+            "type": {
+              "dtype": "fp32",
+              "shape": [
+                64,
+                1
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "completion_latency": 339,
+      "issue_duration": 114,
+      "resource_windows": [],
+      "signature": {
+        "kind": "copy",
+        "operands": [
+          {
+            "dtype": "i1",
+            "shape": [
+              16,
+              2,
+              64
+            ],
+            "space": "global"
+          }
+        ],
+        "outputs": [
+          {
+            "expr": [
+              "copy",
+              [
+                "index",
+                [
+                  "ref",
+                  0
+                ],
+                "loop_index"
+              ]
+            ],
+            "type": {
+              "dtype": "i1",
+              "shape": [
+                2,
+                64
+              ],
+              "space": "shared"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "format": "tilefoundry.warpgroup_hardware",
+  "resources": {},
+  "time_unit": "cycle"
+}

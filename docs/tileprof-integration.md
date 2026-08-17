@@ -2,8 +2,8 @@
 
 TileProf owns benchmark kernels, correctness checks, measurements, provenance,
 record storage, and hardware calibration. TileFoundry owns semantic operation
-signatures, numeric scheduling problems, CP-SAT search, synchronization export,
-and verification.
+signatures, the hardware cost document, internal numeric closure, CP-SAT
+search, synchronization export, and verification.
 
 The integration point is a read-only cost adapter:
 
@@ -11,7 +11,7 @@ The integration point is a read-only cost adapter:
 TileFoundry OperationSignature
         -> exact TileProf semantic identity
         -> measured issue/completion/resource record
-        -> OperationCost
+        -> hardware.json cost entry
 ```
 
 Matching must use a versioned canonical semantic payload and its full digest.
@@ -28,9 +28,7 @@ One accepted record must provide:
 - correctness and measurement status.
 
 Absolute timing values are independently rounded up when converted to integer
-solver units. Sensitivity variants become separate closed problems and solves;
-uncertainty is not hidden inside one duration.
-
-Until the adapter is implemented, TileFoundry accepts authored programs only
-with explicitly selected fixture costs and accepts production-style inputs as
-already closed `WarpgroupProblem` documents.
+solver units. Sensitivity variants become separate hardware documents and
+solves; uncertainty is not hidden inside one duration. The adapter writes or
+supplies `WarpgroupHardware`; TileFoundry does not read TileProf databases
+directly.

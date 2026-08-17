@@ -15,35 +15,23 @@ from tilefoundry.inspection.schedule import render_warpgroup_schedule_html
 from tilefoundry.schedule.warpgroup import warpgroup_schedule_from_json
 
 
-def _schedule_text(format_name: str) -> str:
-    rows = (
-        [
-            [0, "load_a", 100, 102],
-            [0, "compute_b", 103, 105],
-            [0, "publish_c", 106, 107],
-            [1, "load_a", 200, 202],
-            [1, "compute_b", 203, 205],
-            [1, "publish_c", 206, 207],
-        ]
-        if format_name.endswith("v1")
-        else [
-            [0, "load_a", 100, 102, 110],
-            [0, "compute_b", 103, 105, 105],
-            [0, "publish_c", 106, 107, 115],
-            [1, "load_a", 200, 202, 210],
-            [1, "compute_b", 203, 205, 205],
-            [1, "publish_c", 206, 207, 215],
-        ]
-    )
+def _schedule_text() -> str:
     return json.dumps(
         {
-            "format": format_name,
+            "format": "tilefoundry.warpgroup_schedule",
             "lanes": [["load_a", "compute_b"], ["publish_c"]],
             "sync": [
                 {"after": "load_a", "before": "compute_b", "distance": 0},
                 {"after": "publish_c", "before": "load_a", "distance": 1},
             ],
-            "times": rows,
+            "times": [
+                [0, "load_a", 100, 102, 110],
+                [0, "compute_b", 103, 105, 105],
+                [0, "publish_c", 106, 107, 115],
+                [1, "load_a", 200, 202, 210],
+                [1, "compute_b", 203, 205, 205],
+                [1, "publish_c", 206, 207, 215],
+            ],
         }
     )
 
@@ -55,22 +43,18 @@ def _embedded_data(document: str) -> dict[str, object]:
     return cast(dict[str, object], json.loads(document[start:end]))
 
 
-@pytest.mark.parametrize(
-    ("format_name", "expected_time"),
-    [
-        ("tilefoundry.warpgroup_schedule.v1", [0, "load_a", 100, 102, 102]),
-        ("tilefoundry.warpgroup_schedule.v2", [0, "load_a", 100, 102, 110]),
-        ("tilefoundry.warpgroup_schedule.v3", [0, "load_a", 100, 102, 110]),
-    ],
-)
-def test_versions_normalize_and_render_generic_timing(
-    format_name: str, expected_time: list[object]
-) -> None:
-    schedule = warpgroup_schedule_from_json(_schedule_text(format_name))
+def test_render_generic_timing() -> None:
+    schedule = warpgroup_schedule_from_json(_schedule_text())
     document = render_warpgroup_schedule_html(schedule, title="Example schedule")
 
     rows = cast(list[list[object]], _embedded_data(document)["times"])
-    assert next(row for row in rows if row[0] == 0 and row[1] == "load_a") == expected_time
+    assert next(row for row in rows if row[0] == 0 and row[1] == "load_a") == [
+        0,
+        "load_a",
+        100,
+        102,
+        110,
+    ]
     assert "issue interval" in document
     assert "completion tail" in document
     assert "distance-0 sync" in document
@@ -79,7 +63,7 @@ def test_versions_normalize_and_render_generic_timing(
 
 
 def test_html_is_deterministic_escapes_title_and_has_no_invalid_text() -> None:
-    schedule = warpgroup_schedule_from_json(_schedule_text("tilefoundry.warpgroup_schedule.v3"))
+    schedule = warpgroup_schedule_from_json(_schedule_text())
     title = 'A <schedule> & "timing"'
     first = render_warpgroup_schedule_html(schedule, title=title)
     second = render_warpgroup_schedule_html(schedule, title=title)
@@ -96,7 +80,7 @@ def test_visualize_cli_writes_file_and_stdout(
 ) -> None:
     source = tmp_path / "schedule.json"
     output = tmp_path / "schedule.html"
-    source.write_text(_schedule_text("tilefoundry.warpgroup_schedule.v1"), encoding="utf-8")
+    source.write_text(_schedule_text(), encoding="utf-8")
 
     assert main(["visualize", str(source), "--out", str(output)]) == 0
     assert output.is_file()
@@ -111,7 +95,7 @@ def test_visualize_cli_rejects_stdout_and_open_together(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     source = tmp_path / "schedule.json"
-    source.write_text(_schedule_text("tilefoundry.warpgroup_schedule.v3"), encoding="utf-8")
+    source.write_text(_schedule_text(), encoding="utf-8")
 
     assert main(["visualize", str(source), "--out", "-", "--open"]) == 1
     assert "--out - cannot be combined with --open" in capsys.readouterr().err

@@ -1,7 +1,7 @@
 # TileFoundry
 
 TileFoundry searches warpgroup pipeline schedules from typed tile operations.
-It models SSA dependencies, fixed or searched warpgroup ownership, asynchronous
+It models SSA dependencies, fixed warpgroup ownership, asynchronous
 issue/completion timing, shared-memory handoffs and reuse, finite resources,
 and compact periodic loop bodies. CP-SAT produces a timed schedule; an
 independent verifier checks the exported synchronization contract.
@@ -16,27 +16,16 @@ Python 3.12 or newer and OR-Tools 9.15 or newer are required.
 
 ## Search
 
-The retained MLA example contains a semantic program, two closed numeric
-problems, and independently verified schedules:
-
-```bash
-tilefoundry schedule \
-  --problem examples/mla-schedule/problem-16.json \
-  --solver-timeout 60 \
-  --json > /tmp/mla-schedule.json
-```
-
-An authored program can be exercised with explicit illustrative costs:
+The retained MLA example contains one semantic program, one hardware cost
+description, and one independently verified schedule:
 
 ```bash
 tilefoundry schedule \
   --program examples/mla-schedule/program.json \
-  --fixture-costs \
-  --json
+  --hardware examples/mla-schedule/hardware.json \
+  --solver-timeout 60 \
+  --json > /tmp/mla-schedule.json
 ```
-
-Fixture costs are only for semantic and scheduling tests. Production costs are
-expected to arrive through an exact external cost adapter.
 
 ## Visualize
 

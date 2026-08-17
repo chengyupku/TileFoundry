@@ -11,7 +11,9 @@ from typing import Protocol
 
 from ._identifiers import validate_id
 from .errors import WarpgroupValidationError
-from .model import DType, MemorySpace, ResourceCapacity, ResourceDemand, ResourceWindow
+from .model import DType, MemorySpace, ResourceCapacity, ResourceWindow
+
+HARDWARE_FORMAT = "tilefoundry.warpgroup_hardware"
 
 
 class WarpgroupCostError(WarpgroupValidationError):
@@ -127,69 +129,25 @@ class OperationSignature:
 class OperationCost:
     """Exact positive integer cost for one operation signature."""
 
-    duration: int = 0
-    resources: tuple[ResourceDemand, ...] = ()
-    issue_duration: int = 0
-    completion_latency: int = 0
+    issue_duration: int
+    completion_latency: int
     resource_windows: tuple[ResourceWindow, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.issue_duration == 0 and self.completion_latency == 0:
-            if type(self.duration) is not int or self.duration <= 0:
-                raise WarpgroupValidationError("operation duration must be a positive integer")
-            issue_duration = self.duration
-            completion_latency = self.duration
-        else:
-            if type(self.issue_duration) is not int or self.issue_duration <= 0:
-                raise WarpgroupValidationError("issue duration must be a positive integer")
-            if type(self.completion_latency) is not int or self.completion_latency <= 0:
-                raise WarpgroupValidationError("completion latency must be a positive integer")
-            if self.completion_latency < self.issue_duration:
-                raise WarpgroupValidationError("completion latency must be >= issue duration")
-            if self.duration not in (0, self.completion_latency):
-                raise WarpgroupValidationError("legacy duration disagrees with completion latency")
-            issue_duration = self.issue_duration
-            completion_latency = self.completion_latency
-        object.__setattr__(self, "duration", completion_latency)
-        object.__setattr__(self, "issue_duration", issue_duration)
-        object.__setattr__(self, "completion_latency", completion_latency)
-        if type(self.resources) is not tuple or not all(
-            type(item) is ResourceDemand for item in self.resources
-        ):
-            raise WarpgroupValidationError(
-                "operation resources must contain exact ResourceDemand records"
-            )
-        resource_ids = tuple(item.resource_id for item in self.resources)
-        if len(resource_ids) != len(set(resource_ids)):
-            raise WarpgroupValidationError("operation cost contains duplicate resource demands")
+        if type(self.issue_duration) is not int or self.issue_duration <= 0:
+            raise WarpgroupValidationError("issue duration must be a positive integer")
+        if type(self.completion_latency) is not int or self.completion_latency <= 0:
+            raise WarpgroupValidationError("completion latency must be a positive integer")
+        if self.completion_latency < self.issue_duration:
+            raise WarpgroupValidationError("completion latency must be >= issue duration")
         windows = self.resource_windows
         if type(windows) is not tuple or not all(type(item) is ResourceWindow for item in windows):
             raise WarpgroupValidationError(
                 "operation resource windows must contain exact ResourceWindow records"
             )
-        if not windows:
-            windows = tuple(
-                ResourceWindow(item.resource_id, item.amount, 0, completion_latency)
-                for item in self.resources
-            )
         for window in windows:
-            if window.start_offset + window.duration > completion_latency:
+            if window.start_offset + window.duration > self.completion_latency:
                 raise WarpgroupValidationError("resource window exceeds completion latency")
-        maximums: dict[str, int] = {}
-        for window in windows:
-            maximums[window.resource_id] = max(maximums.get(window.resource_id, 0), window.amount)
-        if self.resources:
-            if {item.resource_id: item.amount for item in self.resources} != maximums:
-                raise WarpgroupValidationError("resource demands and windows disagree")
-        else:
-            resources = tuple(
-                ResourceDemand(resource_id, amount)
-                for resource_id, amount in sorted(maximums.items())
-            )
-            object.__setattr__(self, "resources", resources)
-        object.__setattr__(
-            self, "resources", tuple(sorted(self.resources, key=lambda item: item.resource_id))
-        )
         object.__setattr__(self, "resource_windows", tuple(sorted(windows)))
 
 
@@ -218,26 +176,29 @@ class CostLibrary(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class OperationCostLibrary:
-    """An exact in-memory catalog suitable for tests and frozen fixtures."""
+class WarpgroupHardware:
+    """A serializable target cost catalog matched by operation signature."""
 
+    format: str
     time_unit: str
     resources: tuple[ResourceCapacity, ...]
     entries: tuple[OperationCostEntry, ...]
 
     def __post_init__(self) -> None:
+        if self.format != HARDWARE_FORMAT:
+            raise WarpgroupValidationError(f"hardware format must be {HARDWARE_FORMAT!r}")
         validate_id(self.time_unit, "time_unit")
         if type(self.resources) is not tuple or not all(
             type(item) is ResourceCapacity for item in self.resources
         ):
-            raise WarpgroupValidationError("cost library resources must be exact typed records")
+            raise WarpgroupValidationError("hardware resources must be exact typed records")
         if type(self.entries) is not tuple or not all(
             type(item) is OperationCostEntry for item in self.entries
         ):
-            raise WarpgroupValidationError("cost library entries must be exact typed records")
+            raise WarpgroupValidationError("hardware entries must be exact typed records")
         resource_ids = tuple(item.id for item in self.resources)
         if len(resource_ids) != len(set(resource_ids)):
-            raise WarpgroupValidationError("cost library contains duplicate resources")
+            raise WarpgroupValidationError("hardware contains duplicate resources")
         capacities = {item.id: item.capacity for item in self.resources}
         for entry in self.entries:
             for window in entry.cost.resource_windows:
@@ -251,7 +212,7 @@ class OperationCostLibrary:
                     )
         signatures = tuple(item.signature for item in self.entries)
         if len(signatures) != len(set(signatures)):
-            raise WarpgroupCostAmbiguityError("cost library contains duplicate signatures")
+            raise WarpgroupCostAmbiguityError("hardware contains duplicate signatures")
         object.__setattr__(
             self, "resources", tuple(sorted(self.resources, key=lambda item: item.id))
         )
@@ -296,13 +257,14 @@ def _validate_expression(value: CanonicalExpression) -> None:
 __all__ = [
     "CanonicalExpression",
     "CostLibrary",
+    "HARDWARE_FORMAT",
     "OperationCost",
     "OperationCostEntry",
-    "OperationCostLibrary",
     "OperationKind",
     "OperationSignature",
     "SignatureOutput",
     "SignatureValueType",
+    "WarpgroupHardware",
     "ResourceWindow",
     "WarpgroupCostAmbiguityError",
     "WarpgroupCostError",
