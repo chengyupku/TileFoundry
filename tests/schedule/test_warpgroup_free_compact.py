@@ -7,6 +7,7 @@ import json
 import pytest
 
 from tilefoundry.schedule.warpgroup import (
+    PROGRAM_FORMAT,
     operation_signature,
     solve_free_compact,
     warpgroup_program_from_json,
@@ -209,3 +210,68 @@ def test_registers_carried_across_the_loop_have_to_fit_the_file():
         solve_free_compact(
             problem, timeout_seconds=30.0, registers={"matmul": 128 * 4096}
         )
+
+
+# --- an operation whose lane is not decided --------------------------------
+
+def _unassigned():
+    """The same program with every `warp_group` removed."""
+    import copy
+
+    document = copy.deepcopy(PROGRAM)
+    for operation in document["loop"]["ops"]:
+        operation.pop("warp_group", None)
+    return document
+
+
+def test_an_operation_may_arrive_without_a_lane():
+    program = warpgroup_program_from_json(json.dumps(_unassigned()))
+    assert all(operation.warp_group is None for operation in program.loop.ops)
+
+
+def test_absent_is_not_written_back_as_a_lane():
+    """A round trip must not invent an owner for an operation that had none."""
+    from tilefoundry.schedule.warpgroup import warpgroup_program_to_json
+
+    document = _unassigned()
+    program = warpgroup_program_from_json(json.dumps(document))
+    written = json.loads(warpgroup_program_to_json(program))
+    assert all("warp_group" not in operation for operation in written["loop"]["ops"])
+    assert warpgroup_program_from_json(json.dumps(written)) == program
+
+
+def test_the_search_places_an_operation_that_arrived_without_a_lane():
+    program = warpgroup_program_from_json(json.dumps(_unassigned()))
+    problem = build_warpgroup_problem(program, _library(program))
+    result = solve_free_compact(problem, timeout_seconds=30.0)
+    placed = sorted(item for lane in result.lanes for item in lane.operations)
+    assert placed == ["load_a", "load_b", "matmul"]
+
+
+def test_the_search_replaces_a_lane_that_was_declared():
+    """Declared ownership is an input to the fixed-owner model, not to this one.
+
+    Pinning every operation to lane 0 and solving anyway must not return that
+    arrangement -- three operations on one lane of two is not what a search
+    minimising the makespan would choose.
+    """
+    import copy
+
+    document = copy.deepcopy(PROGRAM)
+    for operation in document["loop"]["ops"]:
+        operation["warp_group"] = 0
+    program = warpgroup_program_from_json(json.dumps(document))
+    problem = build_warpgroup_problem(program, _library(program))
+    result = solve_free_compact(problem, timeout_seconds=30.0)
+    assert any(lane.operations for lane in result.lanes[1:])
+
+
+def test_the_fixed_owner_model_refuses_what_it_cannot_decide():
+    """It schedules an assignment; it does not invent one, and it says which."""
+    from tilefoundry.schedule.warpgroup.solve import solve_warpgroup_problem
+
+    program = warpgroup_program_from_json(json.dumps(_unassigned()))
+    problem = build_warpgroup_problem(program, _library(program))
+    with pytest.raises(WarpgroupValidationError) as error:
+        solve_warpgroup_problem(problem)
+    assert "load_a" in str(error.value)

@@ -243,6 +243,14 @@ def _solve_model(
     ):
         raise WarpgroupValidationError("timeout_seconds must be positive")
     operations = tuple(sorted(problem.loop.ops, key=lambda item: item.id))
+    unassigned = tuple(item.id for item in operations if item.warp_group is None)
+    if unassigned:
+        # This model schedules a given assignment. Searching one is a different
+        # solver, and saying so beats failing somewhere in the constraints.
+        raise WarpgroupValidationError(
+            "operations without a warp group cannot be solved by the fixed-owner "
+            f"model: {', '.join(unassigned)}"
+        )
     operation_ids = tuple(operation.id for operation in operations)
     operation_by_id = {operation.id: operation for operation in operations}
     static_span = max(

@@ -225,6 +225,9 @@ def _verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSch
         unknown = sorted(set(lane_by_operation) - expected_operations)
         _fail(f"schedule lane coverage differs: missing={missing!r}, unknown={unknown!r}")
     for operation in problem.loop.ops:
+        if operation.warp_group is None:
+            # Nothing was declared, so there is nothing to contradict.
+            continue
         if lane_by_operation[operation.id] != operation.warp_group:
             _fail(
                 f"operation {operation.id!r} is scheduled on lane "
