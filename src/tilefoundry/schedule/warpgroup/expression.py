@@ -41,12 +41,23 @@ class ElementwiseOperator(str, Enum):
     #: writing the exponent as `exp2(a*k - b*k)` rather than `exp(a - b)` with
     #: the scale applied in a pass of its own is 0.147 ms against 0.175.
     EXP2 = "exp2"
+    #: What an epilogue does to a carried accumulator: an attention output is
+    #: rescaled by the denominator the loop summed. There is no way to write
+    #: that as a multiply without a reciprocal the grammar also lacks, so a
+    #: program that cannot name division cannot describe the statement after
+    #: its last trip.
+    DIV = "div"
 
 
 #: Elementwise operators of one operand. Named as a set rather than tested one
 #: at a time, so that adding a second unary function is adding it here and not
 #: finding every place `exp` was compared against.
 UNARY = frozenset({ElementwiseOperator.EXP, ElementwiseOperator.EXP2})
+#: Operators of exactly two operands. `add`, `mul` and `max` are associative and
+#: read as a fold over any number of them; subtraction and division do not, and
+#: a three-operand one would be an expression whose meaning is the reader's
+#: guess at an association order.
+BINARY = frozenset({ElementwiseOperator.SUB, ElementwiseOperator.DIV})
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,8 +251,9 @@ class ElementwiseExpression(Expression):
         if unary and len(operands) != 1:
             raise WarpgroupValidationError(
                 f"{self.operator.value} requires exactly one operand")
-        if self.operator is ElementwiseOperator.SUB and len(operands) != 2:
-            raise WarpgroupValidationError("sub requires exactly two operands")
+        if self.operator in BINARY and len(operands) != 2:
+            raise WarpgroupValidationError(
+                f"{self.operator.value} requires exactly two operands")
         if len(operands) < required:
             raise WarpgroupValidationError(
                 f"{self.operator.value} requires at least {required} operand(s)"
@@ -343,6 +355,7 @@ def value_references(value: ExpressionValue) -> tuple[str, ...]:
 
 
 __all__ = [
+    "BINARY",
     "CastExpression",
     "ConcatExpression",
     "CopyExpression",
@@ -360,6 +373,7 @@ __all__ = [
     "ScalarLiteral",
     "SelectExpression",
     "TransposeExpression",
+    "UNARY",
     "ValueRef",
     "fold_expression",
     "value_references",

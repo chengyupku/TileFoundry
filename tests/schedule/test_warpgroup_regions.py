@@ -28,6 +28,7 @@ from tilefoundry.schedule.warpgroup import (
     ProgramOperation,
     RegionOperation,
     ResourceCapacity,
+    ScalarLiteral,
     TensorType,
     ValueRef,
     WarpgroupHardware,
@@ -52,6 +53,7 @@ TYPES = (
     TensorType("tile", (1,), DType.FP32, MemorySpace.SHARED),
     TensorType("value", (1,), DType.FP32, MemorySpace.REGISTER),
     TensorType("written", (1,), DType.FP32, MemorySpace.GLOBAL),
+    TensorType("counter", (1,), DType.I32, MemorySpace.REGISTER),
 )
 
 BODY = (
@@ -284,3 +286,55 @@ def test_an_epilogue_may_not_read_another_lanes_register_file() -> None:
 def test_a_lane_names_an_operation_in_one_region_only() -> None:
     with pytest.raises(WarpgroupValidationError, match="more than one region"):
         WarpgroupLane(("load",), prologue=("load",))
+
+
+def test_an_epilogue_divides_by_what_the_loop_accumulated() -> None:
+    """The rescale after the last trip, and the operator it needed.
+
+    An attention output is divided by the denominator its loop summed. There is
+    no writing of that as a multiply without a reciprocal the grammar also
+    lacks, so admitting a region and refusing division would have admitted a
+    region nobody can fill.
+    """
+    rescale = RegionOperation(
+        "rescale",
+        1,
+        (
+            OperationOutput(
+                "%scaled",
+                "value",
+                ElementwiseExpression(
+                    ElementwiseOperator.DIV, (ValueRef("%value"), ValueRef("%value"))
+                ),
+            ),
+        ),
+    )
+    program = _program(epilogue=(rescale,))
+    text = warpgroup_program_to_json(program)
+    _validator("warpgroup-program.schema.json").validate(json.loads(text))
+    assert warpgroup_program_from_json(text) == program
+
+    with pytest.raises(WarpgroupValidationError, match="exactly two operands"):
+        ElementwiseExpression(
+            ElementwiseOperator.DIV,
+            (ValueRef("%value"), ValueRef("%value"), ValueRef("%value")),
+        )
+
+    counted = (
+        *BODY,
+        ProgramOperation("count", (OperationOutput("%count", "counter", ScalarLiteral(1)),), 2),
+    )
+    integer = replace(
+        rescale,
+        outputs=(
+            OperationOutput(
+                "%scaled",
+                "counter",
+                ElementwiseExpression(
+                    ElementwiseOperator.DIV, (ValueRef("%count"), ValueRef("%count"))
+                ),
+            ),
+        ),
+    )
+    with pytest.raises(WarpgroupValidationError, match="div requires a floating dtype"):
+        _program(body=counted, epilogue=(integer,))

@@ -19,6 +19,7 @@ from .expression import (
     ConcatExpression,
     CopyExpression,
     ElementwiseExpression,
+    ElementwiseOperator,
     ExpressionValue,
     IndexExpression,
     LoopIndexRef,
@@ -75,6 +76,15 @@ _FLOAT_DTYPES = {
 }
 
 _INTEGER_DTYPES = set(DType) - _FLOAT_DTYPES - {DType.I1}
+
+#: Elementwise operators that have no integer reading. Integer division
+#: truncates and is a different instruction, so a program asking for one over
+#: integers is asking for something this grammar does not describe.
+_FLOAT_ONLY = {
+    ElementwiseOperator.EXP,
+    ElementwiseOperator.EXP2,
+    ElementwiseOperator.DIV,
+}
 
 
 _T = TypeVar("_T")
@@ -916,8 +926,8 @@ def _value_type(
         )
         broadcast_shape = _broadcast_shapes(*(item.shape for item in operands))
         dtype = _common_dtype(operands, f"{value.operator.value} operands")
-        if value.operator.value == "exp" and dtype not in _FLOAT_DTYPES:
-            raise WarpgroupValidationError("exp requires a floating dtype")
+        if value.operator in _FLOAT_ONLY and dtype not in _FLOAT_DTYPES:
+            raise WarpgroupValidationError(f"{value.operator.value} requires a floating dtype")
         return _ValueType(broadcast_shape, dtype, MemorySpace.REGISTER)
     raise WarpgroupValidationError(f"unsupported expression type {type(value).__name__}")
 

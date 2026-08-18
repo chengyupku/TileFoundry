@@ -28,7 +28,7 @@
     "value": {"oneOf": [{"$ref": "#/$defs/ssa"}, {"$ref": "#/$defs/scalar"}, {"$ref": "#/$defs/expression"}]},
     "indexExpression": {"type": "array", "minItems": 3, "prefixItems": [{"const": "index"}, {"$ref": "#/$defs/ssa"}], "items": {"oneOf": [{"$ref": "#/$defs/nonNegativeInteger"}, {"$ref": "#/$defs/ssa"}]}},
     "unaryExpression": {"type": "array", "prefixItems": [{"enum": ["copy", "cast", "transpose", "exp"]}, {"$ref": "#/$defs/value"}], "items": false, "minItems": 2, "maxItems": 2},
-    "binaryExpression": {"type": "array", "prefixItems": [{"enum": ["matmul", "sub"]}, {"$ref": "#/$defs/value"}, {"$ref": "#/$defs/value"}], "items": false, "minItems": 3, "maxItems": 3},
+    "binaryExpression": {"type": "array", "prefixItems": [{"enum": ["matmul", "sub", "div"]}, {"$ref": "#/$defs/value"}, {"$ref": "#/$defs/value"}], "items": false, "minItems": 3, "maxItems": 3},
     "variadicExpression": {"type": "array", "minItems": 3, "prefixItems": [{"enum": ["add", "mul", "max"]}], "items": {"$ref": "#/$defs/value"}},
     "concatExpression": {"type": "array", "minItems": 4, "prefixItems": [{"const": "concat"}, {"$ref": "#/$defs/nonNegativeInteger"}], "items": {"$ref": "#/$defs/value"}},
     "selectExpression": {"type": "array", "prefixItems": [{"const": "select"}, {"$ref": "#/$defs/value"}, {"$ref": "#/$defs/value"}, {"$ref": "#/$defs/value"}], "items": false, "minItems": 4, "maxItems": 4},
