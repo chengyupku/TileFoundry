@@ -33,6 +33,20 @@ class ElementwiseOperator(str, Enum):
     MUL = "mul"
     MAX = "max"
     EXP = "exp"
+    #: Base two, and separate from `exp` deliberately. They are different
+    #: instructions -- `expf` is `exp2f` and a multiply -- so a program that
+    #: cannot name the second cannot ask a backend for the cheaper one, and a
+    #: cost model closed over what the program declares would be pricing a
+    #: kernel nobody is able to write. Measured on an H200 attention loop,
+    #: writing the exponent as `exp2(a*k - b*k)` rather than `exp(a - b)` with
+    #: the scale applied in a pass of its own is 0.147 ms against 0.175.
+    EXP2 = "exp2"
+
+
+#: Elementwise operators of one operand. Named as a set rather than tested one
+#: at a time, so that adding a second unary function is adding it here and not
+#: finding every place `exp` was compared against.
+UNARY = frozenset({ElementwiseOperator.EXP, ElementwiseOperator.EXP2})
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,9 +235,11 @@ class ElementwiseExpression(Expression):
         if type(self.operator) is not ElementwiseOperator:
             raise WarpgroupValidationError("elementwise operator must be ElementwiseOperator")
         operands = tuple(self.operands)
-        required = 1 if self.operator is ElementwiseOperator.EXP else 2
-        if self.operator is ElementwiseOperator.EXP and len(operands) != 1:
-            raise WarpgroupValidationError("exp requires exactly one operand")
+        unary = self.operator in UNARY
+        required = 1 if unary else 2
+        if unary and len(operands) != 1:
+            raise WarpgroupValidationError(
+                f"{self.operator.value} requires exactly one operand")
         if self.operator is ElementwiseOperator.SUB and len(operands) != 2:
             raise WarpgroupValidationError("sub requires exactly two operands")
         if len(operands) < required:
