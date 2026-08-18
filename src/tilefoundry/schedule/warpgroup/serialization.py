@@ -106,11 +106,12 @@ def _object(
     *,
     fields: frozenset[str],
     label: str,
+    optional: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     if type(value) is not dict:
         raise WarpgroupSerializationError(f"{label} must be a JSON object")
     result = cast(dict[str, object], value)
-    unknown = sorted(set(result) - fields)
+    unknown = sorted(set(result) - fields - optional)
     missing = sorted(fields - set(result))
     if unknown:
         raise WarpgroupSerializationError(
@@ -401,14 +402,16 @@ def _decode_program_loop(value: object) -> ProgramLoop:
     for raw in _array(data["ops"], "loop ops"):
         item = _object(
             raw,
-            fields=frozenset({"id", "warp_group", "outputs"}),
+            fields=frozenset({"id", "outputs"}),
             label="operation",
+            optional=frozenset({"warp_group"}),
         )
+        owner = item.get("warp_group")
         operations.append(
             ProgramOperation(
                 _string(item["id"], "operation ID"),
                 _decode_outputs(item["outputs"], index),
-                _integer(item["warp_group"], "operation warp_group"),
+                None if owner is None else _integer(owner, "operation warp_group"),
             )
         )
     return ProgramLoop(
@@ -424,13 +427,13 @@ def _encode_program_loop(loop: ProgramLoop) -> dict[str, object]:
     operations: list[object] = []
     for item in loop.ops:
         _exact(item, ProgramOperation, "program operation")
-        operations.append(
-            {
-                "id": item.id,
-                "warp_group": item.warp_group,
-                "outputs": _encode_outputs(item.outputs),
-            }
-        )
+        encoded: dict[str, object] = {"id": item.id}
+        # Absent means unassigned, so an unassigned operation writes no field --
+        # otherwise a round trip would invent an owner.
+        if item.warp_group is not None:
+            encoded["warp_group"] = item.warp_group
+        encoded["outputs"] = _encode_outputs(item.outputs)
+        operations.append(encoded)
     return {
         "index": loop.index,
         "iterations": loop.iterations,

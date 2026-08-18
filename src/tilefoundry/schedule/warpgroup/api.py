@@ -38,12 +38,20 @@ def schedule_warpgroups(
     hardware: CostLibrary,
     *,
     timeout_seconds: float = 60.0,
+    search_workers: int = 1,
 ) -> WarpgroupScheduleResult:
-    """Close a program with hardware costs, solve, export, and independently verify."""
+    """Close a program with hardware costs, solve, export, and independently verify.
+
+    ``search_workers`` above one trades the reproducible arrangement for speed:
+    CP-SAT returns whichever of several optimal arrangements a racing worker
+    proves first. One worker keeps the answer reproducible and is the default.
+    """
     if type(program) is not WarpgroupProgram:
         raise WarpgroupValidationError("schedule_warpgroups requires an exact WarpgroupProgram")
     problem = build_warpgroup_problem(program, hardware)
-    solved = solve_warpgroup_problem(problem, timeout_seconds=timeout_seconds)
+    solved = solve_warpgroup_problem(
+        problem, timeout_seconds=timeout_seconds, search_workers=search_workers
+    )
     schedule = export_warpgroup_schedule(problem, solved)
     _verify_warpgroup_schedule(problem, schedule)
     return WarpgroupScheduleResult(solved.status, schedule)

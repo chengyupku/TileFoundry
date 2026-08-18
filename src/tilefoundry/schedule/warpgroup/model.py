@@ -189,13 +189,24 @@ class OperationOutput:
             )
 
 
+def validate_warp_group(value: object) -> None:
+    """A lane index, or None for an operation whose lane is not yet decided."""
+    if value is None:
+        return
+    if type(value) is not int:
+        raise WarpgroupValidationError("operation warp_group must be an integer or absent")
+    if value < 0:
+        raise WarpgroupValidationError("operation warp_group must be non-negative")
+
+
 @dataclass(frozen=True, slots=True)
 class ProgramOperation:
     """One user-authored atomic operation without numeric scheduling cost."""
 
     id: str
     outputs: tuple[OperationOutput, ...]
-    warp_group: int
+    #: Which lane owns this operation, or None to leave it to the scheduler.
+    warp_group: int | None = None
 
     def __post_init__(self) -> None:
         validate_id(self.id, "operation ID")
@@ -203,10 +214,7 @@ class ProgramOperation:
         if not outputs:
             raise WarpgroupValidationError(f"operation {self.id!r} must define an output")
         _unique_ids(outputs, "operation output")
-        if type(self.warp_group) is not int:
-            raise WarpgroupValidationError("operation warp_group must be an integer")
-        if self.warp_group < 0:
-            raise WarpgroupValidationError("operation warp_group must be non-negative")
+        validate_warp_group(self.warp_group)
         object.__setattr__(self, "outputs", tuple(sorted(outputs, key=lambda item: item.id)))
 
 
@@ -242,7 +250,8 @@ class ProblemOperation:
 
     id: str
     outputs: tuple[OperationOutput, ...]
-    warp_group: int
+    #: Which lane owns this operation, or None to leave it to the scheduler.
+    warp_group: int | None
     issue_duration: int
     completion_latency: int
     resource_windows: tuple[ResourceWindow, ...]
@@ -253,10 +262,7 @@ class ProblemOperation:
         if not outputs:
             raise WarpgroupValidationError(f"operation {self.id!r} must define an output")
         _unique_ids(outputs, "operation output")
-        if type(self.warp_group) is not int:
-            raise WarpgroupValidationError("operation warp_group must be an integer")
-        if self.warp_group < 0:
-            raise WarpgroupValidationError("operation warp_group must be non-negative")
+        validate_warp_group(self.warp_group)
         positive_int(self.issue_duration, f"operation {self.id!r} issue duration")
         positive_int(
             self.completion_latency,
@@ -508,6 +514,8 @@ def _validate_ownership(
     label: str,
 ) -> None:
     for operation in operations:
+        if operation.warp_group is None:
+            continue
         if operation.warp_group >= warp_groups:
             raise WarpgroupValidationError(
                 f"{label} operation {operation.id!r} warp_group is out of range"

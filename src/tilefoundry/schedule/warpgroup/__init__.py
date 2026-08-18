@@ -18,6 +18,7 @@ from .cost import (
     WarpgroupHardware,
     WarpgroupMissingSignaturesError,
 )
+from .free_compact import solve_free_compact
 from .errors import (
     WarpgroupInfeasibleError,
     WarpgroupModelError,
@@ -107,6 +108,7 @@ __all__ = [
     "SelectExpression",
     "SynchronizationEdge",
     "SignatureOutput",
+    "solve_free_compact",
     "SignatureValueType",
     "TensorType",
     "TimedOperation",
