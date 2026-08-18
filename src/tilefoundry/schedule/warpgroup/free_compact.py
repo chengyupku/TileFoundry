@@ -101,6 +101,20 @@ def solve_free_compact(
         sum(operation.completion_latency for operation in operations),
         sum(operation.issue_duration for operation in operations),
     ) + max(operation.completion_latency for operation in operations)
+    # Every operation end to end, overlapping nothing -- which is what a
+    # schedule exists to avoid, so this is always valid and always loose. It
+    # bounds every offset, the makespan, and how many window copies the periodic
+    # resource model builds, so tightening it is worth a great deal: on an FA3
+    # loop, 5765 down to 5000 takes a proof from 45.7 seconds to 16.3.
+    #
+    # It is nonetheless not a knob, because a horizon that is too small does not
+    # fail. It returns a *worse* schedule labelled OPTIMAL -- 2627 against 2249
+    # at a horizon of 3500 -- having proved optimality over a space that
+    # excluded the answer. Nor can that be detected after the fact: the guard
+    # this once had checked whether an operation started near the horizon, and
+    # the schedule a binding horizon forces has *small* offsets, precisely
+    # because it was forced to be compact. Until there is a bound that can be
+    # derived rather than guessed, the loose one is the only honest one.
     horizon = max(static_span, 1)
 
     # Every operation is issued on some lane and a lane issues one at a time, so
