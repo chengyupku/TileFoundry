@@ -291,6 +291,17 @@ def solve_free_compact(
         )
     model.AddMaxEquality(makespan, completion_exprs)
     model.Minimize(makespan)
+    # Search the period first and from the bottom. The objective is the
+    # makespan, which the period dominates once the loop has any length, so
+    # every improvement the search finds by moving an offset is worth a fraction
+    # of one it finds by shortening the period -- and left to itself the search
+    # spends its time on the offsets. Left to itself here means: the incumbent
+    # sat at 3320 for twenty seconds and only reached the optimal 2390 at forty.
+    # A decision strategy is an order to try things in, not a restriction on
+    # what may be tried, so this cannot lose a schedule.
+    model.AddDecisionStrategy(
+        [initiation_interval], cp_model.CHOOSE_FIRST, cp_model.SELECT_MIN_VALUE
+    )
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(timeout_seconds)
