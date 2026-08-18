@@ -200,6 +200,57 @@ def _verify_resources(problem: WarpgroupProblem, times: dict[_Instance, TimedOpe
                 _fail(f"resource {resource.id!r} exceeds capacity at time {timestamp}")
 
 
+def _region_ids(problem: WarpgroupProblem) -> set[str]:
+    return {operation.id for operation in (*problem.prologue, *problem.epilogue)}
+
+
+def _verify_regions(problem: WarpgroupProblem, schedule: WarpgroupSchedule) -> None:
+    """Every region operation on its declared lane, in its declared order.
+
+    There is nothing to search here and therefore nothing to check a search
+    against: what a schedule may get wrong about a region is dropping one,
+    inventing one, or reordering a run whose order is its whole meaning.
+    """
+    for region in ("prologue", "epilogue"):
+        declared: dict[int, list[str]] = {lane: [] for lane in range(problem.warp_groups)}
+        for operation in getattr(problem, region):
+            declared[operation.warp_group].append(operation.id)
+        for lane_index, lane in enumerate(schedule.lanes):
+            found = list(getattr(lane, region))
+            if found != declared[lane_index]:
+                _fail(
+                    f"schedule lane {lane_index} {region} is {found!r}, "
+                    f"expected {declared[lane_index]!r}"
+                )
+
+
+def _region_semantic_tables(
+    problem: WarpgroupProblem,
+) -> tuple[dict[str, str], dict[str, MemorySpace], dict[str, tuple[str, ...]]]:
+    """The body's tables widened by the regions, for register locality only.
+
+    Register locality is the one rule that has to span the loop boundary: an
+    epilogue that reduces a carried accumulator reads a register file belonging
+    to one warp group, and reading it from another is not slow but impossible.
+    The completion relations stay body-only -- a region has no periodic instance
+    for an edge to name.
+    """
+    types = {item.id: item for item in problem.types}
+    owner, spaces, users = _semantic_tables(problem)
+    widened = {value_id: set(operation_ids) for value_id, operation_ids in users.items()}
+    for operation in (*problem.prologue, *problem.epilogue):
+        for output in operation.outputs:
+            owner[output.id] = operation.id
+            spaces[output.id] = types[output.type_id].space
+            for value_id in value_references(output.expression):
+                widened.setdefault(value_id, set()).add(operation.id)
+    return (
+        owner,
+        spaces,
+        {value_id: tuple(sorted(operation_ids)) for value_id, operation_ids in widened.items()},
+    )
+
+
 def _verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSchedule) -> None:
     """Verify one schedule against an internal closed problem."""
     if type(problem) is not WarpgroupProblem:
@@ -220,9 +271,13 @@ def _verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSch
         for lane_index, lane in enumerate(schedule.lanes)
         for operation_id in lane.operations
     }
-    if set(lane_by_operation) != expected_operations:
+    _verify_regions(problem, schedule)
+    for lane_index, lane in enumerate(schedule.lanes):
+        for operation_id in lane.prologue + lane.epilogue:
+            lane_by_operation[operation_id] = lane_index
+    if set(lane_by_operation) - _region_ids(problem) != expected_operations:
         missing = sorted(expected_operations - set(lane_by_operation))
-        unknown = sorted(set(lane_by_operation) - expected_operations)
+        unknown = sorted(set(lane_by_operation) - expected_operations - _region_ids(problem))
         _fail(f"schedule lane coverage differs: missing={missing!r}, unknown={unknown!r}")
     for operation in problem.loop.ops:
         if operation.warp_group is None:
@@ -293,7 +348,7 @@ def _verify_warpgroup_schedule(problem: WarpgroupProblem, schedule: WarpgroupSch
 
     semantic_edges: set[_ExpandedEdge] = set()
 
-    owner, spaces, users = _semantic_tables(problem)
+    owner, spaces, users = _region_semantic_tables(problem)
     for value_id, space in spaces.items():
         if space is not MemorySpace.REGISTER:
             continue

@@ -45,6 +45,7 @@ from .model import (
     ProgramInput,
     ProgramLoop,
     ProgramOperation,
+    RegionOperation,
     ResourceCapacity,
     ResourceWindow,
     SynchronizationEdge,
@@ -442,6 +443,49 @@ def _encode_program_loop(loop: ProgramLoop) -> dict[str, object]:
     }
 
 
+def _decode_region(value: object, label: str) -> tuple[RegionOperation, ...]:
+    """One ordered run of operations that executes once.
+
+    A region operation names its lane and says nothing about time. Its
+    ``warp_group`` is required where the loop's is optional, because nothing
+    searches a region's assignment: an absent owner there would be a field with
+    no reader rather than an undecided one. There is no cost field for the same
+    reason that there is no row in ``times`` -- a region runs off the steady
+    state a cost is priced against.
+
+    Expressions decode against no loop index, since a region has no trip.
+    """
+    operations: list[RegionOperation] = []
+    for raw in _array(value, label):
+        item = _object(
+            raw,
+            fields=frozenset({"id", "warp_group", "outputs"}),
+            label=f"{label} operation",
+        )
+        operations.append(
+            RegionOperation(
+                _string(item["id"], f"{label} operation ID"),
+                _integer(item["warp_group"], f"{label} operation warp_group"),
+                _decode_outputs(item["outputs"], ""),
+            )
+        )
+    return tuple(operations)
+
+
+def _encode_region(operations: tuple[RegionOperation, ...], label: str) -> list[object]:
+    encoded: list[object] = []
+    for item in operations:
+        _exact(item, RegionOperation, f"{label} operation")
+        encoded.append(
+            {
+                "id": item.id,
+                "warp_group": item.warp_group,
+                "outputs": _encode_outputs(item.outputs),
+            }
+        )
+    return encoded
+
+
 def _decode_resources(value: object) -> tuple[ResourceCapacity, ...]:
     return tuple(
         ResourceCapacity(resource_id, _integer(capacity, "resource capacity"))
@@ -579,6 +623,7 @@ def warpgroup_program_from_json(text: str) -> WarpgroupProgram:
             _loads(text),
             fields=frozenset({"format", "warp_groups", "types", "inputs", "loop"}),
             label="warpgroup program",
+            optional=frozenset({"prologue", "epilogue"}),
         )
         return WarpgroupProgram(
             _string(data["format"], "program format"),
@@ -586,6 +631,8 @@ def warpgroup_program_from_json(text: str) -> WarpgroupProgram:
             _decode_types(data["types"]),
             _decode_inputs(data["inputs"]),
             _decode_program_loop(data["loop"]),
+            _decode_region(data.get("prologue", []), "prologue"),
+            _decode_region(data.get("epilogue", []), "epilogue"),
         )
     except WarpgroupSerializationError:
         raise
@@ -596,13 +643,19 @@ def warpgroup_program_from_json(text: str) -> WarpgroupProgram:
 def warpgroup_program_to_json(program: WarpgroupProgram) -> str:
     """Validate an exact typed program and return canonical JSON."""
     _exact(program, WarpgroupProgram, "program")
-    payload = {
+    payload: dict[str, object] = {
         "format": program.format,
         "warp_groups": program.warp_groups,
         "types": _encode_types(program.types),
         "inputs": _encode_inputs(program.inputs),
         "loop": _encode_program_loop(program.loop),
     }
+    # A program with no region writes no field, so every document written before
+    # regions existed re-encodes to exactly the bytes it was read from.
+    if program.prologue:
+        payload["prologue"] = _encode_region(program.prologue, "prologue")
+    if program.epilogue:
+        payload["epilogue"] = _encode_region(program.epilogue, "epilogue")
     decoded = warpgroup_program_from_json(_canonical(payload))
     if decoded != program:
         raise WarpgroupSerializationError("program canonical round-trip changed the value")
@@ -676,6 +729,49 @@ def warpgroup_hardware_to_json(hardware: WarpgroupHardware) -> str:
     return _canonical(payload)
 
 
+def _decode_lane(value: object) -> WarpgroupLane:
+    """A lane is its body order, or an object when it also runs a region.
+
+    A lane with nothing but a body stays the bare array it has always been, so a
+    schedule written before regions existed decodes and re-encodes byte for
+    byte. The object form is what a lane with a prologue or an epilogue needs,
+    an array having nowhere to put a second list.
+    """
+    if type(value) is list:
+        return WarpgroupLane(
+            tuple(_string(item, "lane operation") for item in _array(value, "lane"))
+        )
+    item = _object(
+        value,
+        fields=frozenset({"operations"}),
+        label="lane",
+        optional=frozenset({"prologue", "epilogue"}),
+    )
+    return WarpgroupLane(
+        tuple(_string(entry, "lane operation") for entry in _array(item["operations"], "lane")),
+        tuple(
+            _string(entry, "lane prologue operation")
+            for entry in _array(item.get("prologue", []), "lane prologue")
+        ),
+        tuple(
+            _string(entry, "lane epilogue operation")
+            for entry in _array(item.get("epilogue", []), "lane epilogue")
+        ),
+    )
+
+
+def _encode_lane(lane: WarpgroupLane) -> object:
+    _exact(lane, WarpgroupLane, "schedule lane")
+    if not lane.prologue and not lane.epilogue:
+        return list(lane.operations)
+    encoded: dict[str, object] = {"operations": list(lane.operations)}
+    if lane.prologue:
+        encoded["prologue"] = list(lane.prologue)
+    if lane.epilogue:
+        encoded["epilogue"] = list(lane.epilogue)
+    return encoded
+
+
 def warpgroup_schedule_from_json(text: str) -> WarpgroupSchedule:
     """Decode and validate one strict successful schedule document."""
     try:
@@ -685,10 +781,7 @@ def warpgroup_schedule_from_json(text: str) -> WarpgroupSchedule:
             label="warpgroup schedule",
         )
         format_value = _string(data["format"], "schedule format")
-        lanes = tuple(
-            WarpgroupLane(tuple(_string(item, "lane operation") for item in _array(raw, "lane")))
-            for raw in _array(data["lanes"], "lanes")
-        )
+        lanes = tuple(_decode_lane(raw) for raw in _array(data["lanes"], "lanes"))
         sync: list[SynchronizationEdge] = []
         for raw in _array(data["sync"], "sync"):
             item = _object(
@@ -730,10 +823,7 @@ def warpgroup_schedule_from_json(text: str) -> WarpgroupSchedule:
 def warpgroup_schedule_to_json(schedule: WarpgroupSchedule) -> str:
     """Validate an exact typed successful schedule and return canonical JSON."""
     _exact(schedule, WarpgroupSchedule, "schedule")
-    lanes: list[object] = []
-    for lane in schedule.lanes:
-        _exact(lane, WarpgroupLane, "schedule lane")
-        lanes.append(list(lane.operations))
+    lanes = [_encode_lane(lane) for lane in schedule.lanes]
     sync: list[object] = []
     for edge in schedule.sync:
         _exact(edge, SynchronizationEdge, "synchronization edge")

@@ -42,7 +42,13 @@ def _value_type(value: TensorType) -> SignatureValueType:
 def _type_table(program: WarpgroupProgram) -> dict[str, TensorType]:
     types = {item.id: item for item in program.types}
     values = {item.id: types[item.type_id] for item in program.inputs}
-    outputs = {output.id: output for operation in program.loop.ops for output in operation.outputs}
+    # Region outputs are here because a body operation may read one -- a tile the
+    # prologue made resident -- and a signature has to be able to type it.
+    outputs = {
+        output.id: output
+        for operation in (*program.loop.ops, *program.prologue, *program.epilogue)
+        for output in operation.outputs
+    }
     for output in outputs.values():
         values[output.id] = types[output.type_id]
     for item in program.loop.iter_args:
@@ -169,7 +175,13 @@ def operation_signature(
 def build_warpgroup_problem(
     program: WarpgroupProgram, cost_library: CostLibrary
 ) -> WarpgroupProblem:
-    """Resolve every unique operation signature before returning a problem."""
+    """Resolve every unique operation signature before returning a problem.
+
+    Only the loop is closed against costs. A region runs once, so there is no
+    steady state to price it against and no resource window it could occupy for
+    a period; it is carried into the problem as it was written, and a program
+    that declares one solves to the schedule it solved to without.
+    """
     if type(program) is not WarpgroupProgram:
         raise WarpgroupValidationError("build requires an exact WarpgroupProgram")
     resolved: dict[OperationSignature, OperationCost | None] = {}
@@ -217,6 +229,8 @@ def build_warpgroup_problem(
         program.types,
         program.inputs,
         loop,
+        program.prologue,
+        program.epilogue,
     )
 
 

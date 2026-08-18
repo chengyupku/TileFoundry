@@ -31,9 +31,10 @@ problem is the validated closure of one program and one hardware description.
 
 ## Program
 
-A program contains `format`, `warp_groups`, `types`, `inputs`, and `loop`.
-Each operation contains an ID, fixed `warp_group`, typed SSA outputs, and
-expression trees. Input order and operation order have no scheduling meaning.
+A program contains `format`, `warp_groups`, `types`, `inputs`, and `loop`, and
+optionally `prologue` and `epilogue`. Each operation contains an ID, fixed
+`warp_group`, typed SSA outputs, and expression trees. Input order and
+operation order have no scheduling meaning.
 
 Expressions cover constants, references, indexing, copies, casts, transpose,
 concatenation, selection, elementwise arithmetic, reductions, exponentials,
@@ -43,6 +44,48 @@ axis validity, and index bounds.
 Dependencies are derived from SSA definitions and uses. They are not a second
 authored edge list. Loop `iter_args` give the initial value and the SSA value
 yielded to the next iteration.
+
+## Prologue And Epilogue
+
+`prologue` and `epilogue` are ordered runs of operations that execute once
+rather than once per trip: the transfer that makes an input resident before the
+first trip, the reduction and write-back that turn the last carried value into
+the kernel's result. Both are optional, and a program that declares neither is
+exactly the program it was before they existed.
+
+Three things are true of a region operation and of nothing else.
+
+**It has no cost.** `issue_duration`, `completion_latency` and
+`resource_windows` price an operation against a steady state, and a region has
+none: a transfer before the first trip does not lengthen the period, it
+lengthens the prefix in front of it. Cost closure therefore skips a region, it
+never enters the periodic resource model, and it has no row in `times`. The
+makespan a solve reports is the loop's, and it is short of the whole kernel's by
+however long the two regions take.
+
+**It declares its lane, and `warp_group` is required.** A loop operation may
+omit it, because there the assignment is what the search decides; a region is
+not searched, and the emitter still has to put the statement in one warp group's
+arm of the dispatch. The lane is also the load-bearing half of the description:
+a transfer declared on one lane and its consumer on another is the cross-lane
+edge from which a generator derives the handshake it would otherwise be handed
+as literal text.
+
+**Order is meaning.** A loop operation's position is the schedule's to choose,
+so operations and outputs are canonicalised by ID; a region has nothing but the
+order it was written in, so neither is sorted.
+
+Visibility is positional within a region and global within the body. A prologue
+operation reads program inputs and what an earlier prologue operation defined.
+The body reads those, its `iter_args` and its own definitions. An epilogue
+operation reads all of that plus what an earlier epilogue operation defined. A
+prologue definition is ready when the first trip starts, which is what being an
+input means to the loop, so the two are one visibility class and no dependency
+is derived from the prologue into the body.
+
+The epilogue is the only place a global-space value may be defined, because it
+is the only place a kernel writes its result. Neither region may reference the
+loop index: a region has no trip.
 
 ## Hardware And Cost Closure
 

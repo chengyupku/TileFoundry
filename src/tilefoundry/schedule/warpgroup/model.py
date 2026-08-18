@@ -29,6 +29,7 @@ from .expression import (
     SelectExpression,
     TransposeExpression,
     ValueRef,
+    fold_expression,
     value_references,
 )
 
@@ -200,6 +201,58 @@ def validate_warp_group(value: object) -> None:
 
 
 @dataclass(frozen=True, slots=True)
+class RegionOperation:
+    """One operation of a region that runs once rather than once per trip.
+
+    A region is the prologue or the epilogue: the transfers, initialisations,
+    reductions and write-backs that surround the loop. Two things separate such
+    an operation from a body operation, and both follow from it running once.
+
+    **It carries no cost.** ``issue_duration``, ``completion_latency`` and
+    ``resource_windows`` price an operation against a steady state, and a region
+    has none to be priced against: a 500-cycle transfer before the first trip
+    does not lengthen the period, it lengthens the prefix in front of it. So a
+    region operation never becomes a ``ProblemOperation``, never enters the
+    periodic resource model, and has no row in ``times``. The makespan a solve
+    reports is therefore the loop's, and it is short of the kernel's by however
+    long the two regions take; pricing them needs a model of a region, which
+    this is not.
+
+    **It carries a lane, and the lane is required.** A body operation may leave
+    ``warp_group`` absent because there the assignment is what the search
+    decides. Nothing searches a region, and the emitter still has to put the
+    statement in one warp group's arm of the dispatch, so a declared owner is
+    the only answer that is not a placeholder. It is also the load-bearing half:
+    a transfer on one lane and the wait for it on another is exactly the
+    cross-lane edge a generator needs in order to derive the handshake rather
+    than be handed it.
+
+    Order is meaning here. A body operation's place is the schedule's to choose,
+    so ``ProgramOperation`` may be canonicalised by ID; a region has nothing but
+    the order it was written in, so neither its operations nor their outputs are
+    sorted.
+    """
+
+    id: str
+    warp_group: int
+    outputs: tuple[OperationOutput, ...]
+
+    def __post_init__(self) -> None:
+        validate_id(self.id, "region operation ID")
+        if type(self.warp_group) is not int or self.warp_group < 0:
+            raise WarpgroupValidationError(
+                f"region operation {self.id!r} warp_group must be a non-negative integer"
+            )
+        outputs = _typed_tuple(
+            self.outputs, OperationOutput, f"region operation {self.id!r} outputs"
+        )
+        if not outputs:
+            raise WarpgroupValidationError(f"region operation {self.id!r} must define an output")
+        _unique_ids(outputs, "region operation output")
+        object.__setattr__(self, "outputs", outputs)
+
+
+@dataclass(frozen=True, slots=True)
 class ProgramOperation:
     """One user-authored atomic operation without numeric scheduling cost."""
 
@@ -341,13 +394,24 @@ class DefUseDependency:
 
 @dataclass(frozen=True, slots=True)
 class WarpgroupProgram:
-    """User-authored typed SSA work without any numeric scheduling cost."""
+    """User-authored typed SSA work without any numeric scheduling cost.
+
+    ``prologue`` and ``epilogue`` are the operations that run once, before the
+    first trip and after the last: the transfer that makes an input resident,
+    the reduction and write-back that turn the loop's last carried value into
+    the kernel's result. Both are optional and both default to empty, so a
+    program that describes a loop body and nothing else is unchanged. It still
+    parses, closes against the same costs and solves to the same schedule,
+    because neither region reaches the solver at all.
+    """
 
     format: str
     warp_groups: int
     types: tuple[TensorType, ...]
     inputs: tuple[ProgramInput, ...]
     loop: ProgramLoop
+    prologue: tuple[RegionOperation, ...] = ()
+    epilogue: tuple[RegionOperation, ...] = ()
 
     def __post_init__(self) -> None:
         if self.format != PROGRAM_FORMAT:
@@ -357,20 +421,25 @@ class WarpgroupProgram:
         inputs = _typed_tuple(self.inputs, ProgramInput, "program inputs")
         if type(self.loop) is not ProgramLoop:
             raise WarpgroupValidationError("program loop must be ProgramLoop")
+        prologue = _typed_tuple(self.prologue, RegionOperation, "program prologue")
+        epilogue = _typed_tuple(self.epilogue, RegionOperation, "program epilogue")
         _unique_ids(types, "type")
         _unique_ids(inputs, "input")
         object.__setattr__(self, "types", tuple(sorted(types, key=lambda item: item.id)))
         object.__setattr__(self, "inputs", tuple(sorted(inputs, key=lambda item: item.id)))
+        object.__setattr__(self, "prologue", prologue)
+        object.__setattr__(self, "epilogue", epilogue)
         _validate_ownership(
             self.loop.ops,
             self.warp_groups,
             label="program",
         )
-        _validate_semantics(self.types, self.inputs, self.loop)
+        _validate_region_ownership(prologue + epilogue, self.warp_groups)
+        _validate_semantics(self.types, self.inputs, self.loop, prologue, epilogue)
 
     def dependencies(self) -> tuple[DefUseDependency, ...]:
         """Derive the canonical operation graph from SSA definitions and uses."""
-        return _derive_dependencies(self.inputs, self.loop)
+        return _derive_dependencies(self.inputs, self.loop, self.prologue)
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,6 +452,11 @@ class WarpgroupProblem:
     types: tuple[TensorType, ...]
     inputs: tuple[ProgramInput, ...]
     loop: ProblemLoop
+    #: Carried through from the program unpriced. Closing a program against
+    #: hardware prices its loop; a region has no steady state to be priced
+    #: against, so the closure copies it rather than costing it.
+    prologue: tuple[RegionOperation, ...] = ()
+    epilogue: tuple[RegionOperation, ...] = ()
 
     def __post_init__(self) -> None:
         validate_id(self.time_unit, "time_unit")
@@ -392,17 +466,22 @@ class WarpgroupProblem:
         inputs = _typed_tuple(self.inputs, ProgramInput, "problem inputs")
         if type(self.loop) is not ProblemLoop:
             raise WarpgroupValidationError("problem loop must be ProblemLoop")
+        prologue = _typed_tuple(self.prologue, RegionOperation, "problem prologue")
+        epilogue = _typed_tuple(self.epilogue, RegionOperation, "problem epilogue")
         _unique_ids(resources, "resource")
         _unique_ids(types, "type")
         _unique_ids(inputs, "input")
         object.__setattr__(self, "resources", tuple(sorted(resources, key=lambda item: item.id)))
         object.__setattr__(self, "types", tuple(sorted(types, key=lambda item: item.id)))
         object.__setattr__(self, "inputs", tuple(sorted(inputs, key=lambda item: item.id)))
+        object.__setattr__(self, "prologue", prologue)
+        object.__setattr__(self, "epilogue", epilogue)
         _validate_ownership(
             self.loop.ops,
             self.warp_groups,
             label="problem",
         )
+        _validate_region_ownership(prologue + epilogue, self.warp_groups)
         capacity = {item.id: item.capacity for item in self.resources}
         for operation in self.loop.ops:
             for window in operation.resource_windows:
@@ -415,28 +494,44 @@ class WarpgroupProblem:
                         f"operation {operation.id!r} window for {window.resource_id!r} "
                         "exceeds capacity"
                     )
-        _validate_semantics(self.types, self.inputs, self.loop)
+        _validate_semantics(self.types, self.inputs, self.loop, prologue, epilogue)
 
     def dependencies(self) -> tuple[DefUseDependency, ...]:
         """Derive the canonical operation graph from SSA definitions and uses."""
-        return _derive_dependencies(self.inputs, self.loop)
+        return _derive_dependencies(self.inputs, self.loop, self.prologue)
 
 
 @dataclass(frozen=True, slots=True)
 class WarpgroupLane:
-    """The stable ordered body program assigned to one warpgroup."""
+    """The stable ordered program assigned to one warpgroup.
+
+    ``operations`` is the body, issued once per trip. ``prologue`` and
+    ``epilogue`` are the region operations this lane runs before the first trip
+    and after the last, in the order the program declared them; an emitter
+    places them either side of this lane's trip loop, inside its arm of the
+    warp-group dispatch. Both are empty for a program that declares no region.
+    """
 
     operations: tuple[str, ...]
+    prologue: tuple[str, ...] = ()
+    epilogue: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if not isinstance(self.operations, (tuple, list)):
-            raise WarpgroupValidationError("lane operations must be a sequence")
-        operations = tuple(self.operations)
-        for operation in operations:
-            validate_id(operation, "lane operation ID")
-        if len(operations) != len(set(operations)):
-            raise WarpgroupValidationError("a lane must not repeat an operation")
-        object.__setattr__(self, "operations", operations)
+        for region in ("operations", "prologue", "epilogue"):
+            value = getattr(self, region)
+            if not isinstance(value, (tuple, list)):
+                raise WarpgroupValidationError(f"lane {region} must be a sequence")
+            entries = tuple(value)
+            for operation in entries:
+                validate_id(operation, f"lane {region} operation ID")
+            if len(entries) != len(set(entries)):
+                raise WarpgroupValidationError(f"a lane must not repeat a {region} operation")
+            object.__setattr__(self, region, entries)
+        everything = self.operations + self.prologue + self.epilogue
+        if len(everything) != len(set(everything)):
+            raise WarpgroupValidationError(
+                "a lane must not name one operation in more than one region"
+            )
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -494,7 +589,11 @@ class WarpgroupSchedule:
         times = _typed_tuple(self.times, TimedOperation, "schedule times")
         if not lanes:
             raise WarpgroupValidationError("schedule must contain at least one lane")
-        lane_ops = tuple(operation for lane in lanes for operation in lane.operations)
+        lane_ops = tuple(
+            operation
+            for lane in lanes
+            for operation in lane.operations + lane.prologue + lane.epilogue
+        )
         if len(lane_ops) != len(set(lane_ops)):
             raise WarpgroupValidationError("an operation must not appear in more than one lane")
         if len(sync) != len(set(sync)):
@@ -522,6 +621,14 @@ def _validate_ownership(
             )
 
 
+def _validate_region_ownership(operations: tuple[RegionOperation, ...], warp_groups: int) -> None:
+    for operation in operations:
+        if operation.warp_group >= warp_groups:
+            raise WarpgroupValidationError(
+                f"region operation {operation.id!r} warp_group is out of range"
+            )
+
+
 @dataclass(frozen=True, slots=True)
 class _ValueType:
     shape: tuple[int, ...]
@@ -533,6 +640,8 @@ def _validate_semantics(
     types: tuple[TensorType, ...],
     inputs: tuple[ProgramInput, ...],
     loop: ProgramLoop | ProblemLoop,
+    prologue: tuple[RegionOperation, ...] = (),
+    epilogue: tuple[RegionOperation, ...] = (),
 ) -> None:
     type_by_id = {item.id: item for item in types}
     for item in inputs:
@@ -541,9 +650,21 @@ def _validate_semantics(
                 f"input {item.id!r} references undefined type {item.type_id!r}"
             )
 
-    output_records = tuple(output for operation in loop.ops for output in operation.outputs)
+    operation_ids = tuple(
+        operation.id for operation in (*loop.ops, *prologue, *epilogue)
+    )
+    if len(operation_ids) != len(set(operation_ids)):
+        repeated = sorted({item for item in operation_ids if operation_ids.count(item) > 1})
+        raise WarpgroupValidationError(f"operation ID(s) used more than once: {repeated!r}")
+
+    body_outputs = tuple(output for operation in loop.ops for output in operation.outputs)
+    prologue_outputs = tuple(output for operation in prologue for output in operation.outputs)
+    epilogue_outputs = tuple(output for operation in epilogue for output in operation.outputs)
+    output_records = body_outputs + prologue_outputs + epilogue_outputs
     output_owner = {
-        output.id: operation.id for operation in loop.ops for output in operation.outputs
+        output.id: operation.id
+        for operation in (*loop.ops, *prologue, *epilogue)
+        for output in operation.outputs
     }
     all_ssa = (
         tuple(item.id for item in inputs)
@@ -555,24 +676,30 @@ def _validate_semantics(
     if len(all_ssa) != len(set(all_ssa)):
         repeated = sorted({item for item in all_ssa if all_ssa.count(item) > 1})
         raise WarpgroupValidationError(f"duplicate SSA definition(s): {repeated!r}")
+    epilogue_ids = {output.id for output in epilogue_outputs}
     for output in output_records:
         declared = type_by_id.get(output.type_id)
         if declared is None:
             raise WarpgroupValidationError(
                 f"output {output.id!r} references undefined type {output.type_id!r}"
             )
-        if declared.space is MemorySpace.GLOBAL:
+        # The epilogue is where a kernel's result is written and a result lives
+        # in global memory. Anywhere else a global definition would claim that a
+        # trip owns storage outside the block, which no operation here does.
+        if declared.space is MemorySpace.GLOBAL and output.id not in epilogue_ids:
             raise WarpgroupValidationError(
                 f"output {output.id!r} cannot define global external storage"
             )
 
-    output_by_id = {item.id: item for item in output_records}
-    input_ids = {item.id for item in inputs}
+    body_by_id = {item.id: item for item in body_outputs}
+    # A prologue definition has landed by the time the first trip starts, which
+    # is what being an input means to the loop, so the two are one class.
+    input_ids = {item.id for item in inputs} | {output.id for output in prologue_outputs}
     value_types: dict[str, TensorType] = {item.id: type_by_id[item.type_id] for item in inputs}
     for output in output_records:
         value_types[output.id] = type_by_id[output.type_id]
     for iter_arg in loop.iter_args:
-        yielded = output_by_id.get(iter_arg.yield_value.id)
+        yielded = body_by_id.get(iter_arg.yield_value.id)
         if yielded is None:
             raise WarpgroupValidationError(
                 f"iter_arg {iter_arg.id!r} yield must name a loop-body SSA definition"
@@ -597,25 +724,63 @@ def _validate_semantics(
                 f"iter_arg {iter_arg.id!r} init is not an exact typed value"
             )
 
-    for output in output_records:
-        for use in value_references(output.expression):
-            if use not in value_types:
+    def check(outputs: tuple[OperationOutput, ...], visible: set[str], region: bool) -> None:
+        for output in outputs:
+            for use in value_references(output.expression):
+                if use not in visible:
+                    raise WarpgroupValidationError(
+                        f"output {output.id!r} uses undefined SSA value {use!r}"
+                    )
+            if region and loop.index in _loop_index_references(output.expression):
                 raise WarpgroupValidationError(
-                    f"output {output.id!r} uses undefined SSA value {use!r}"
+                    f"output {output.id!r} uses the loop index {loop.index!r} outside the loop"
                 )
-        _check_expression(
-            output.expression,
-            type_by_id[output.type_id],
-            value_types,
-            loop.index,
-            loop.iterations,
-        )
+            _check_expression(
+                output.expression,
+                type_by_id[output.type_id],
+                value_types,
+                loop.index,
+                loop.iterations,
+            )
+
+    # Visibility is positional in a region and global in the body. A region runs
+    # once, in the order it is written, so an operation may read only what
+    # something ahead of it has already produced. The body's order is the
+    # schedule's to choose, so its operations all see each other and the cycle
+    # check below is what refuses the arrangements that cannot exist.
+    visible = {item.id for item in inputs}
+    for operation in prologue:
+        visible.update(output.id for output in operation.outputs)
+        check(operation.outputs, visible, region=True)
+    body_visible = (
+        input_ids
+        | {item.id for item in loop.iter_args}
+        | {output.id for output in body_outputs}
+    )
+    check(body_outputs, body_visible, region=False)
+    visible = set(body_visible)
+    for operation in epilogue:
+        visible.update(output.id for output in operation.outputs)
+        check(operation.outputs, visible, region=True)
 
     graph = {
         output.id: tuple(ref for ref in value_references(output.expression) if ref in output_owner)
         for output in output_records
     }
     _reject_expression_cycles(graph)
+
+
+def _loop_index_references(value: ExpressionValue) -> tuple[str, ...]:
+    """Every loop-index use in an expression, which a region may not contain."""
+    return fold_expression(
+        value,
+        reference=lambda _item: (),
+        scalar=lambda _item: (),
+        compose=lambda _operator, attributes, children: tuple(
+            item.id for item in attributes if type(item) is LoopIndexRef
+        )
+        + tuple(reference for child in children for reference in child),
+    )
 
 
 def _validate_scalar_for_dtype(value: ScalarLiteral, dtype: DType, label: str) -> None:
@@ -840,9 +1005,16 @@ def _reject_expression_cycles(graph: dict[str, tuple[str, ...]]) -> None:
 
 
 def _derive_dependencies(
-    inputs: tuple[ProgramInput, ...], loop: ProgramLoop | ProblemLoop
+    inputs: tuple[ProgramInput, ...],
+    loop: ProgramLoop | ProblemLoop,
+    prologue: tuple[RegionOperation, ...] = (),
 ) -> tuple[DefUseDependency, ...]:
-    external = {item.id for item in inputs}
+    # A prologue definition has completed before the first trip starts, so it
+    # constrains no body operation and enters this graph exactly as an input
+    # does. That is what keeps a region out of the periodic model entirely.
+    external = {item.id for item in inputs} | {
+        output.id for operation in prologue for output in operation.outputs
+    }
     owner = {output.id: operation.id for operation in loop.ops for output in operation.outputs}
     carried = {item.id: owner[item.yield_value.id] for item in loop.iter_args}
     edges: set[DefUseDependency] = set()
@@ -873,6 +1045,7 @@ __all__ = [
     "ProgramInput",
     "ProgramLoop",
     "ProgramOperation",
+    "RegionOperation",
     "ResourceCapacity",
     "ResourceWindow",
     "SCHEDULE_FORMAT",
