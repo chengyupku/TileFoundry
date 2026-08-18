@@ -34,6 +34,9 @@ class WarpgroupSolveResult:
     status: SolveStatus
     lanes: tuple[WarpgroupLane, ...]
     times: tuple[TimedOperation, ...]
+    #: The steady-state period, for a solver that schedules one. Deriving it
+    #: from `times` needs three iterations, which a short loop does not have.
+    initiation_interval: int | None = None
 
     def __post_init__(self) -> None:
         if self.status not in ("OPTIMAL", "FEASIBLE_NOT_PROVEN"):
@@ -46,6 +49,10 @@ class WarpgroupSolveResult:
             type(item) is TimedOperation for item in self.times
         ):
             raise WarpgroupValidationError("solve times must contain exact TimedOperation records")
+        if self.initiation_interval is not None and (
+            type(self.initiation_interval) is not int or self.initiation_interval <= 0
+        ):
+            raise WarpgroupValidationError("initiation interval must be a positive integer")
 
     @property
     def makespan(self) -> int:
@@ -178,6 +185,24 @@ def _add_compact_periodic_resource_constraints(
             )
 
 
+def _resource_lower_bound(
+    problem: WarpgroupProblem, operations: tuple[ProblemOperation, ...]
+) -> int:
+    """The period a resource cannot deliver less than, over one iteration."""
+    if not problem.resources:
+        return 0
+    capacity = {item.id: item.capacity for item in problem.resources}
+    held: dict[str, int] = {}
+    for operation in operations:
+        for window in operation.resource_windows:
+            held[window.resource_id] = (
+                held.get(window.resource_id, 0) + window.duration * window.amount
+            )
+    return max(
+        (-(-total // capacity[resource]) for resource, total in held.items()), default=0
+    )
+
+
 def _materialize_periodic_times(
     operations: tuple[ProblemOperation, ...],
     iterations: int,
@@ -206,7 +231,9 @@ def _materialize_periodic_times(
     return tuple(sorted(times))
 
 
-def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> WarpgroupSolveResult:
+def _solve_model(
+    problem: WarpgroupProblem, timeout_seconds: float, search_workers: int = 1
+) -> WarpgroupSolveResult:
     """Solve with static body timing and finite boundary instances."""
     cp_model: Any = importlib.import_module("ortools.sat.python.cp_model")
     if (
@@ -223,9 +250,16 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
         sum(operation.issue_duration for operation in operations),
     ) + max(operation.completion_latency for operation in operations)
     horizon = max(static_span, 1)
-    ii_lower_bound = max(operation.issue_duration for operation in operations)
+    ii_lower_bound = max(
+        max(operation.issue_duration for operation in operations),
+        _resource_lower_bound(problem, operations),
+    )
     model = cp_model.CpModel()
     initiation_interval = model.NewIntVar(1, horizon, "II")
+    # The bound sizes the periodic resource model -- `copy_bound` divides by it
+    # -- so it has to hold of the variable too, or a raised bound builds fewer
+    # window copies than a shorter period would need.
+    model.Add(initiation_interval >= ii_lower_bound)
     offsets = {
         operation.id: model.NewIntVar(
             0, horizon - operation.completion_latency, f"body_offset_{operation.id}"
@@ -384,7 +418,7 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
     def new_solver() -> Any:
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = max(deadline - time.monotonic(), 0.001)
-        solver.parameters.num_search_workers = 1
+        solver.parameters.num_search_workers = search_workers
         solver.parameters.random_seed = 0
         solver.parameters.cp_model_presolve = True
         solver.parameters.symmetry_level = 2
@@ -465,17 +499,25 @@ def _solve_model(problem: WarpgroupProblem, timeout_seconds: float) -> Warpgroup
         "OPTIMAL" if final_status == cp_model.OPTIMAL else "FEASIBLE_NOT_PROVEN",
         lanes,
         tuple(sorted(times)),
+        ii,
     )
 
 
 def solve_warpgroup_problem(
-    problem: WarpgroupProblem, *, timeout_seconds: float = 60.0
+    problem: WarpgroupProblem, *, timeout_seconds: float = 60.0, search_workers: int = 1
 ) -> WarpgroupSolveResult:
-    """Solve one closed problem without importing its cost provider or target."""
+    """Solve one closed problem without importing its cost provider or target.
+
+    ``search_workers`` above one trades the reproducible arrangement for speed:
+    CP-SAT returns whichever of several optimal arrangements a racing worker
+    proves first. One worker keeps the answer reproducible and is the default.
+    """
+    if type(search_workers) is not int or search_workers < 1:
+        raise WarpgroupValidationError("search_workers must be a positive integer")
     if type(problem) is not WarpgroupProblem:
         raise WarpgroupValidationError("solve requires an exact WarpgroupProblem")
     try:
-        return _solve_model(problem, timeout_seconds)
+        return _solve_model(problem, timeout_seconds, search_workers)
     except (WarpgroupSolveError, WarpgroupValidationError):
         raise
     except Exception as error:
